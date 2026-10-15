@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="MarketplaceUAT.App.Pages.EditarProductoPage"
+    Title="Editar publicación">
+
+    <ScrollView>
+
+        <VerticalStackLayout
+            Padding="20"
+            Spacing="15">
+
+            <Label
+                Text="Editar publicación"
+                FontSize="30"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Modifica la información de tu producto."
+                FontSize="16"
+                HorizontalTextAlignment="Center"
+                Margin="0,0,0,10" />
+
+            <Label
+                Text="Nombre del producto"
+                FontAttributes="Bold" />
+
+            <Entry
+                x:Name="NombreEntry"
+                Placeholder="Nombre del producto" />
+
+            <Label
+                Text="Descripción"
+                FontAttributes="Bold" />
+
+            <Editor
+                x:Name="DescripcionEditor"
+                Placeholder="Descripción del producto"
+                AutoSize="TextChanges"
+                MinimumHeightRequest="120" />
+
+            <Label
+                Text="Precio"
+                FontAttributes="Bold" />
+
+            <Entry
+                x:Name="PrecioEntry"
+                Placeholder="Precio"
+                Keyboard="Numeric" />
+
+            <Label
+                Text="Condición"
+                FontAttributes="Bold" />
+
+            <Picker
+                x:Name="CondicionPicker"
+                Title="Selecciona la condición">
+                <Picker.Items>
+                    <x:String>Nuevo</x:String>
+                    <x:String>Usado</x:String>
+                </Picker.Items>
+            </Picker>
+            <Label
+                Text="Estado"
+                FontAttributes="Bold" />
+
+            <Picker
+                x:Name="EstadoPicker"
+                Title="Selecciona el estado">
+                <Picker.Items>
+                    <x:String>Disponible</x:String>
+                    <x:String>Vendido</x:String>
+                    <x:String>Reservado</x:String>
+                </Picker.Items>
+            </Picker>
+            <Label
+                Text="Categoría"
+                FontAttributes="Bold" />
+
+            <Picker
+                x:Name="CategoriaPicker"
+                Title="Selecciona una categoría"
+                ItemDisplayBinding="{Binding Nombre}" />
+
+            <Label
+                Text="Imágenes del producto"
+                FontAttributes="Bold" />
+
+            <Image
+                x:Name="ImagenPreview"
+                HeightRequest="200"
+                Aspect="AspectFit"
+                IsVisible="False" />
+
+            <HorizontalStackLayout
+                x:Name="MiniaturasLayout"
+                Spacing="8"
+                HorizontalOptions="Center"
+                IsVisible="False" />
+
+            <Button
+                Text="📷 Agregar imágenes"
+                Clicked="OnAgregarImagenesClicked" />
+
+            <Button
+                Text="💾 Guardar cambios"
+                Clicked="OnGuardarClicked"
+                Margin="0,10,0,0" />
+
+            <Button
+                Text="Cancelar"
+                Clicked="OnCancelarClicked"
+                BackgroundColor="Transparent"
+                TextColor="Gray" />
+
+        </VerticalStackLayout>
+
+    </ScrollView>
+
+</ContentPage>

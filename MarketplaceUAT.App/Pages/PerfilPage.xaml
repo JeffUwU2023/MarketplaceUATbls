@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="MarketplaceUAT.App.Pages.PerfilPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Mi perfil"
+    BackgroundColor="{AppThemeBinding Light=#F5F6FA, Dark=#181818}">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="24"
+            Spacing="18">
+
+            <VerticalStackLayout
+                HorizontalOptions="Center"
+                Spacing="8">
+
+                <Border
+                WidthRequest="110"
+                HeightRequest="110"
+                StrokeThickness="0"
+                BackgroundColor="#DCE8FF"
+                StrokeShape="RoundRectangle 55">
+
+                    <Grid
+                WidthRequest="110"
+                HeightRequest="110">
+
+                        <Image
+                x:Name="FotoPerfilImage"
+                Aspect="AspectFill"
+                IsVisible="False" />
+
+                        <Label
+                x:Name="FotoPerfilPlaceholder"
+                Text="👤"
+                FontSize="50"
+                HorizontalOptions="Center"
+                VerticalOptions="Center" />
+
+                    </Grid>
+                </Border>
+
+                <Button
+                    x:Name="CambiarFotoButton"
+                    Text="Cambiar fotografía"
+                    Clicked="OnCambiarFotoClicked"
+                    BackgroundColor="#E8EDF8"
+                    TextColor="#2457C5"
+                    CornerRadius="10"
+                    HeightRequest="44"
+                    WidthRequest="200"
+                    HorizontalOptions="Center" />
+
+                <Button
+                    x:Name="EliminarFotoButton"
+                    Text="Eliminar fotografía"
+                    Clicked="OnEliminarFotoClicked"
+                    BackgroundColor="#FDE8E7"
+                    TextColor="#B42318"
+                    CornerRadius="10"
+                    IsVisible="False" />
+
+                <Label
+                    Text="Mi perfil"
+                    FontSize="26"
+                    FontAttributes="Bold"
+                    HorizontalOptions="Center"
+                    TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+                <Label
+                    Text="Información de tu cuenta universitaria"
+                    FontSize="14"
+                    HorizontalOptions="Center"
+                    HorizontalTextAlignment="Center"
+                    TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+            </VerticalStackLayout>
+
+            <Border
+                Padding="18"
+                Stroke="{AppThemeBinding Light=#DDDDDD, Dark=#444444}"
+                StrokeShape="RoundRectangle 16"
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#252525}">
+
+                <VerticalStackLayout Spacing="16">
+
+                    <Label
+                        Text="Datos personales"
+                        FontSize="18"
+                        FontAttributes="Bold"
+                        TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="Nombres" FontAttributes="Bold" />
+                        <Entry
+                            x:Name="NombresEntry"
+                            Placeholder="Tus nombres"
+                            MaxLength="100" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="Apellidos" FontAttributes="Bold" />
+                        <Entry
+                            x:Name="ApellidosEntry"
+                            Placeholder="Tus apellidos"
+                            MaxLength="100" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="Tipo de cuenta" FontAttributes="Bold" />
+                        <Entry
+                            x:Name="TipoUsuarioEntry"
+                            IsReadOnly="True" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        x:Name="MatriculaLayout"
+                        Spacing="5">
+
+                        <Label Text="Matrícula" FontAttributes="Bold" />
+                        <Entry
+                            x:Name="MatriculaEntry"
+                            IsReadOnly="True" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="Correo institucional" FontAttributes="Bold" />
+                        <Entry
+                            x:Name="CorreoEntry"
+                            Keyboard="Email"
+                            MaxLength="150" />
+                    </VerticalStackLayout>
+
+                    <Button
+                        x:Name="GuardarButton"
+                        Text="Guardar cambios"
+                        Clicked="OnGuardarClicked"
+                        BackgroundColor="#2457C5"
+                        TextColor="White"
+                        CornerRadius="10"
+                        HeightRequest="50" />
+
+                </VerticalStackLayout>
+            </Border>
+
+            <Border
+                Padding="18"
+                Stroke="{AppThemeBinding Light=#DDDDDD, Dark=#444444}"
+                StrokeShape="RoundRectangle 16"
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#252525}">
+
+                <VerticalStackLayout Spacing="14">
+
+                    <Label
+                        Text="Cambiar contraseña"
+                        FontSize="18"
+                        FontAttributes="Bold" />
+
+                    <Entry
+                        x:Name="PasswordEntry"
+                        Placeholder="Nueva contraseña (8 a 20 caracteres)"
+                        IsPassword="True"
+                        MaxLength="20" />
+
+                    <Entry
+                        x:Name="ConfirmarPasswordEntry"
+                        Placeholder="Confirmar nueva contraseña"
+                        IsPassword="True"
+                        MaxLength="20" />
+
+                    <Button
+                        Text="Actualizar contraseña"
+                        Clicked="OnCambiarPasswordClicked"
+                        BackgroundColor="#E8EDF8"
+                        TextColor="#2457C5"
+                        CornerRadius="10"
+                        HeightRequest="48" />
+
+                    <Label
+                        Text="Deja ambos campos vacíos si no deseas cambiar la contraseña."
+                        FontSize="12"
+                        TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

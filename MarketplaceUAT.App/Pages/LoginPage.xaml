@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="MarketplaceUAT.App.Pages.LoginPage"
+    Title="Iniciar sesión">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="30"
+            Spacing="20"
+            VerticalOptions="Center">
+
+            <Label
+                Text="Marketplace UAT"
+                FontSize="32"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Iniciar sesión"
+                FontSize="24"
+                HorizontalOptions="Center" />
+
+            <Grid ColumnDefinitions="*,Auto">
+
+                <Entry
+                x:Name="CorreoEntry"
+                Placeholder="Correo electrónico"
+                Keyboard="Email"
+                Grid.Column="0" />
+
+                <Button
+                Text="✕"
+                Clicked="OnLimpiarCorreoClicked"
+                WidthRequest="50"
+                HeightRequest="50"
+                Grid.Column="1" />
+
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto,Auto">
+
+                <Entry
+                x:Name="PasswordEntry"
+                Placeholder="Contraseña"
+                IsPassword="True"
+                Grid.Column="0" />
+
+                <Button
+                x:Name="MostrarPasswordButton"
+                ImageSource="ojo_abierto.svg"
+                Clicked="OnMostrarPasswordClicked"
+                WidthRequest="50"
+                HeightRequest="50"
+                Grid.Column="1" />
+
+                <Button
+                Text="✕"
+                Clicked="OnLimpiarPasswordClicked"
+                WidthRequest="50"
+                HeightRequest="50"
+                Grid.Column="2" />
+
+            </Grid>
+            <Button
+                x:Name="LoginButton"
+                Text="Iniciar sesión"
+                Clicked="OnLoginClicked" />
+
+            <Button
+                Text="Crear una cuenta"
+                Clicked="OnCrearCuentaClicked"
+                BackgroundColor="Transparent"
+                TextColor="Blue" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

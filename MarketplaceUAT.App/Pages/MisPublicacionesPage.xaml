@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="MarketplaceUAT.App.Pages.MisPublicacionesPage"
+    Title="Mis publicaciones">
+
+    <ScrollView>
+
+        <VerticalStackLayout
+            Padding="20"
+            Spacing="15">
+
+            <Label
+                Text="Mis publicaciones"
+                FontSize="30"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Productos que has publicado en Marketplace UAT"
+                FontSize="16"
+                HorizontalTextAlignment="Center"
+                Margin="0,0,0,10" />
+
+            <Border
+                StrokeThickness="1"
+                Padding="12">
+
+                <Entry
+                x:Name="BuscarPublicacionEntry"
+                Placeholder="Buscar mis publicaciones..."
+                ClearButtonVisibility="WhileEditing"
+                TextChanged="OnBuscarPublicacionTextChanged" />
+
+            </Border>
+
+            <Picker
+    x:Name="OrdenarPublicacionesPicker"
+    Title="Ordenar publicaciones"
+    SelectedIndexChanged="OnOrdenarPublicacionesChanged">
+
+                <Picker.Items>
+                    <x:String>Más recientes</x:String>
+                    <x:String>Más antiguas</x:String>
+                </Picker.Items>
+
+            </Picker>
+
+            <VerticalStackLayout
+    x:Name="SinResultadosBusquedaLayout"
+    Spacing="15"
+    HorizontalOptions="Center"
+    IsVisible="False"
+    Margin="0,20,0,0">
+
+                <Label
+        Text="🔍"
+        FontSize="50"
+        HorizontalOptions="Center" />
+
+                <Label
+        Text="No se encontraron publicaciones"
+        FontSize="24"
+        FontAttributes="Bold"
+        HorizontalTextAlignment="Center" />
+
+                <Label
+        Text="Intenta buscar con otro nombre."
+        FontSize="16"
+        HorizontalTextAlignment="Center"
+        MaximumWidthRequest="320" />
+
+            </VerticalStackLayout>
+
+            <CollectionView
+        x:Name="MisPublicacionesCollection"
+        SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+
+                    <DataTemplate>
+
+                        <Border
+                            StrokeThickness="1"
+                            Padding="15"
+                            Margin="0,0,0,10">
+
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                              Tapped="OnPublicacionTapped" />
+                            </Border.GestureRecognizers>
+
+                            <VerticalStackLayout
+                                Spacing="8">
+
+                                <Image
+                                    Source="{Binding ImagenUrl}"
+                                    HeightRequest="180"
+                                    Aspect="AspectFit" />
+
+                                <Label
+                                    Text="{Binding Nombre}"
+                                    FontSize="18"
+                                    FontAttributes="Bold" />
+
+                                <Label
+                                    Text="{Binding Precio, StringFormat='{}{0:C}'}"
+                                    FontSize="20" />
+
+                                <Label
+                                    Text="{Binding Condicion}" />
+
+                                <Label
+                                    Text="{Binding EstadoTexto}"
+                                    FontSize="14" />
+                                <Label
+                                    Text="{Binding FechaPublicacion, StringFormat='Publicado el {0:dd/MM/yyyy} a las {0:HH:mm}'}"
+                                    FontSize="14"
+                                    TextColor="Gray" />
+
+                                <Grid
+                                    ColumnDefinitions="*,*"
+                                    ColumnSpacing="10"
+                                    Margin="0,5,0,0">
+
+                                    <Button
+                                        Grid.Column="0"
+                                        Text="✏️ Editar"
+                                        Clicked="OnEditarClicked" />
+
+                                    <Button
+                                        Grid.Column="1"
+                                        Text="🗑 Eliminar"
+                                        Clicked="OnEliminarClicked" />
+
+                                </Grid>
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+                    </DataTemplate>
+
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+
+            <VerticalStackLayout
+                x:Name="SinPublicacionesLayout"
+                Spacing="15"
+                HorizontalOptions="Center"
+                IsVisible="False"
+                Margin="0,40,0,0">
+
+                <Label
+                    Text="📦"
+                    FontSize="50"
+                    HorizontalOptions="Center" />
+
+                <Label
+                    Text="Todavía no tienes publicaciones"
+                    FontSize="24"
+                    FontAttributes="Bold"
+                    HorizontalTextAlignment="Center" />
+
+                <Label
+                    Text="Publica un producto para comenzar a vender dentro de Marketplace UAT."
+                    FontSize="16"
+                    HorizontalTextAlignment="Center"
+                    MaximumWidthRequest="320" />
+
+                <Button
+                    Text="➕ Publicar producto"
+                    Clicked="OnPublicarProductoClicked"
+                    Margin="0,10,0,0" />
+
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+
+    </ScrollView>
+
+</ContentPage>
+
