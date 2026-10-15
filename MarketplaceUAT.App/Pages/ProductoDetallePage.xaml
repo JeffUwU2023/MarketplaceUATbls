@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MarketplaceUAT.App.Pages.ProductoDetallePage"
+             Title="Detalle del producto">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="20"
+            Spacing="20">
+
+            <CarouselView
+            x:Name="ImagenesCarousel"
+            HeightRequest="250"
+            ItemsSource="{Binding ImagenesProducto}"
+            IndicatorView="IndicadorImagenes">
+
+                <CarouselView.ItemTemplate>
+                    <DataTemplate>
+                        <Image
+                Source="{Binding}"
+                HeightRequest="250"
+                Aspect="AspectFit" />
+                    </DataTemplate>
+                </CarouselView.ItemTemplate>
+
+            </CarouselView>
+
+            <IndicatorView
+            x:Name="IndicadorImagenes"
+            HorizontalOptions="Center" />
+
+            <Image
+            x:Name="ImagenPlaceholder"
+            Source="dotnet_bot.png"
+            HeightRequest="250"
+            Aspect="AspectFit"
+            IsVisible="False" />
+
+            <Label
+                x:Name="NombreProductoLabel"
+                FontSize="28"
+                FontAttributes="Bold" />
+
+            <Label
+                x:Name="PrecioProductoLabel"
+                FontSize="26" />
+
+            <BoxView
+                HeightRequest="1" />
+
+            <Label
+                Text="Información del producto"
+                FontSize="22"
+                FontAttributes="Bold" />
+
+            <Label
+                x:Name="CondicionProductoLabel"
+                FontSize="18" />
+
+            <Label
+                x:Name="EstadoProductoLabel"
+                FontSize="18" />
+
+            <Label
+                x:Name="CategoriaProductoLabel"
+                FontSize="18" />
+
+            <Label
+                Text="Descripción"
+                FontSize="22"
+                FontAttributes="Bold"
+                Margin="0,10,0,0" />
+
+            <Label
+                x:Name="DescripcionProductoLabel"
+                FontSize="17" />
+
+            <Label
+                Text="Información del vendedor"
+                FontSize="22"
+                FontAttributes="Bold"
+                Margin="0,10,0,0" />
+
+            <Label
+                x:Name="NombreVendedorLabel"
+                FontSize="18" />
+
+            <Label
+                x:Name="MatriculaVendedorLabel"
+                FontSize="17" />
+
+            <Label
+                x:Name="CorreoVendedorLabel"
+                FontSize="17" />
+
+            <Button
+                x:Name="AccionProductoButton"
+                Text="📩 Contactar vendedor"
+                Margin="0,5,0,0"
+                Clicked="OnAccionProductoClicked" />
+
+            <Button
+                x:Name="FavoritoButton"
+                Text="♡ Agregar a favoritos"
+                Margin="0,10,0,0"
+                Clicked="OnAgregarFavoritoClicked" />
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
+
+

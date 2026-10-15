@@ -1,0 +1,372 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" 
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" 
+             x:Class="MarketplaceUAT.App.Pages.MainPage"
+             Title="Marketplace UAT">
+    <ScrollView>
+        <VerticalStackLayout 
+            Padding="20" 
+            Spacing="20">
+            
+            <Label 
+                Text="Marketplace UAT" 
+                FontSize="30" 
+                FontAttributes="Bold" 
+                HorizontalOptions="Center" />
+            <Label 
+                Text="Compra y vende dentro de la comunidad universitaria" 
+                FontSize="16" 
+                HorizontalTextAlignment="Center" />
+            <Label
+                x:Name="UsuarioSesionLabel"
+                FontSize="16"
+                HorizontalOptions="Center"
+                IsVisible="False" />
+
+
+            <Grid
+                ColumnDefinitions="Auto,*"
+                ColumnSpacing="12"
+                Margin="0,10,0,5">
+
+
+
+                <Border
+            x:Name="PerfilAvatarBorder"
+            Grid.Column="0"
+            WidthRequest="48"
+            HeightRequest="48"
+            StrokeThickness="0"
+            BackgroundColor="#DCE8FF"
+            StrokeShape="RoundRectangle 24"
+            VerticalOptions="Center">
+
+                    <Grid>
+                        <Label
+            x:Name="PerfilPlaceholder"
+            Text="👤"
+            FontSize="24"
+            HorizontalOptions="Center"
+            VerticalOptions="Center" />
+
+                        <Image
+            x:Name="PerfilFotoImage"
+            Aspect="AspectFill"
+            IsVisible="False" />
+                    </Grid>
+
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPerfilAvatarTapped" />
+                    </Border.GestureRecognizers>
+                </Border>
+
+
+                <Button
+        x:Name="SesionButton"
+        Grid.Column="1"
+        Text="Iniciar sesión"
+        Clicked="OnSesionButtonClicked"
+        VerticalOptions="Center" />
+
+            </Grid>
+
+            <Grid
+    ColumnDefinitions="*,*"
+    RowDefinitions="Auto,Auto"
+    ColumnSpacing="10"
+    RowSpacing="10">
+
+                <Button
+        Grid.Row="0"
+        Grid.Column="0"
+        Text="❤️ Mis favoritos"
+        Clicked="OnAbrirFavoritosClicked" />
+
+                <Button
+        Grid.Row="0"
+        Grid.Column="1"
+        Text="➕ Publicar producto"
+        Clicked="OnAbrirPublicarProductoClicked" />
+
+                <Button
+        Grid.Row="1"
+        Grid.Column="0"
+        Text="📦 Mis publicaciones"
+        Clicked="OnAbrirMisPublicacionesClicked" />
+
+                <Button
+        x:Name="ConversacionesButton"
+        Grid.Row="1"
+        Grid.Column="1"
+        Text="💬 Mis conversaciones"
+        FontSize="13"
+        LineBreakMode="WordWrap"
+        Clicked="OnConversacionesClicked" />
+
+            </Grid>
+            <Border 
+                StrokeThickness="1" 
+                Padding="12">
+
+                <VerticalStackLayout>
+
+                    <Entry 
+                x:Name="BuscarEntry"
+                Placeholder="Buscar productos..."
+                HeightRequest="50"
+                FontSize="16"
+                ClearButtonVisibility="WhileEditing"
+                TextChanged="OnBuscarTextChanged"
+                Focused="OnBuscarFocused"
+                Completed="OnBuscarCompleted" />
+
+                    <CollectionView
+                    x:Name="SugerenciasCollection"
+                    IsVisible="False"
+                    SelectionMode="Single"
+                    SelectionChanged="OnSugerenciaSeleccionada"
+                    MaximumHeightRequest="200"
+                    ZIndex="10">
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Padding="10">
+                                    <Label
+                    Text="{Binding Nombre}"
+                    FontSize="15" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                    </CollectionView>
+
+                </VerticalStackLayout>
+
+            </Border>
+            <Label 
+                Text="Categorías" 
+                FontSize="22" 
+                FontAttributes="Bold" />
+            <HorizontalStackLayout
+                Spacing="10"
+                HorizontalOptions="Center">
+ 
+                <Button
+                Text="Todas"
+                Clicked="OnTodasCategoriasClicked" />
+
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout
+                Spacing="6"
+                HorizontalOptions="Center">
+
+                <Button
+                Text="Electrónica"
+                Clicked="OnCategoriaClicked"
+                CommandParameter="1" />
+
+                <Button
+                Text="Libros"
+                Clicked="OnCategoriaClicked"
+                CommandParameter="2" />
+
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout
+              Spacing="6"
+              HorizontalOptions="Center">
+
+                <Button
+              Text="Ropa"
+              Clicked="OnCategoriaClicked"
+              CommandParameter="3" />
+
+                <Button
+              Text="Muebles"
+              Clicked="OnCategoriaClicked"
+              CommandParameter="4" />
+
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout
+               Spacing="6"
+               HorizontalOptions="Center">
+
+                <Button
+               Text="Videojuegos"
+               Clicked="OnCategoriaClicked"
+               CommandParameter="5" />
+
+                <Button
+               Text="Otros"
+               Clicked="OnCategoriaClicked"
+               CommandParameter="6" />
+
+            </HorizontalStackLayout>
+
+            <Button
+        x:Name="FiltrosButton"
+        Text="🔎 Filtros"
+        Clicked="OnFiltrosClicked"
+        Margin="0,10,0,5" />
+
+            <VerticalStackLayout
+        x:Name="FiltrosLayout"
+        IsVisible="False"
+        Spacing="8">
+
+                <Label
+        Text="Condición"
+        FontSize="20"
+        FontAttributes="Bold"
+        Margin="0,5,0,0" />
+
+                <Picker
+        x:Name="CondicionPicker"
+        Title="Selecciona una condición"
+        SelectedIndexChanged="OnCondicionChanged">
+
+                    <Picker.Items>
+                        <x:String>Todas</x:String>
+                        <x:String>Nuevo</x:String>
+                        <x:String>Usado</x:String>
+                    </Picker.Items>
+
+                </Picker>
+
+                <Label
+            Text="Rango de precio"
+            FontSize="20"
+            FontAttributes="Bold"
+            Margin="0,5,0,0" />
+
+                <Grid
+            ColumnDefinitions="*,*"
+            ColumnSpacing="10">
+
+                    <Entry
+            x:Name="PrecioMinimoEntry"
+            Grid.Column="0"
+            Placeholder="Precio mínimo"
+            Keyboard="Numeric"
+            TextChanged="OnPrecioChanged" />
+
+                    <Entry
+            x:Name="PrecioMaximoEntry"
+            Grid.Column="1"
+            Placeholder="Precio máximo"
+            Keyboard="Numeric"
+            TextChanged="OnPrecioChanged" />
+
+                </Grid>
+
+                <Label
+            Text="Ordenar por"
+            FontSize="20"
+            FontAttributes="Bold"
+            Margin="0,10,0,0" />
+
+                <Picker
+            x:Name="OrdenarPicker"
+            Title="Selecciona un orden"
+            SelectedIndexChanged="OnOrdenarChanged">
+
+                    <Picker.Items>
+                        <x:String>Sin ordenar</x:String>
+                        <x:String>Más recientes</x:String>
+                        <x:String>Más antiguos</x:String>
+                        <x:String>Precio: menor a mayor</x:String>
+                        <x:String>Precio: mayor a menor</x:String>
+                        <x:String>Nombre: A-Z</x:String>
+                        <x:String>Nombre: Z-A</x:String>
+                    </Picker.Items>
+
+                </Picker>
+
+                <Button
+            Text="🔎 Aplicar filtros"
+            Clicked="OnAplicarFiltrosClicked"
+            Margin="0,5,0,5" />
+
+                <Button
+            Text="🧹 Limpiar filtros"
+            Clicked="OnLimpiarFiltrosClicked"
+            Margin="0,5,0,10" />
+
+            </VerticalStackLayout>
+
+            <Label 
+                Text="Productos recientes" 
+                FontSize="22" 
+                FontAttributes="Bold" 
+                Margin="0,10,0,0" />
+
+            <Label
+                x:Name="SinResultadosLabel"
+                Text="🔍 No encontramos productos"
+                FontSize="18"
+                FontAttributes="Bold"
+                HorizontalOptions="Center"
+                HorizontalTextAlignment="Center"
+                IsVisible="False"
+                Margin="0,20,0,10" />
+            <CollectionView
+                x:Name="ProductosCollection"
+                SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border
+                StrokeThickness="1"
+                Padding="15"
+                Margin="0,0,0,10">
+
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                        Tapped="OnProductoTapped" />
+                            </Border.GestureRecognizers>
+
+                            <VerticalStackLayout
+                    Spacing="8">
+
+                                <Image
+                        Source="{Binding ImagenUrl}"
+                        HeightRequest="180"
+                        Aspect="AspectFit" />
+
+                                <Label
+                        Text="{Binding Nombre}"
+                        FontSize="18"
+                        FontAttributes="Bold" 
+                        TextColor="#E0E0E0" />
+
+                                <Label
+                        Text="{Binding Precio, StringFormat='{}{0:C}'}"
+                        FontSize="20" />
+
+                                <Label
+                        Text="{Binding Condicion}" />
+
+                                <Label
+                        Text="{Binding EstadoTexto}"
+                        FontSize="14" />
+
+                                <Label
+                        Text="{Binding FechaPublicacionTexto}"
+                        FontSize="14"
+                        TextColor="Gray" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+
+        </VerticalStackLayout>
+        
+    </ScrollView>
+    
+</ContentPage>

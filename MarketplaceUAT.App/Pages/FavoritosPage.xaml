@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="MarketplaceUAT.App.Pages.FavoritosPage"
+    Title="Mis favoritos">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="20"
+            Spacing="15">
+
+            <Label
+                Text="Mis favoritos"
+                FontSize="30"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Productos que has guardado como favoritos"
+                FontSize="16"
+                HorizontalTextAlignment="Center"
+                Margin="0,0,0,10" />
+
+            <Entry
+                x:Name="BuscarFavoritoEntry"
+                Placeholder="Buscar productos favoritos..."
+                ClearButtonVisibility="WhileEditing"
+                TextChanged="OnBuscarFavoritoTextChanged" />
+
+            <Picker
+                x:Name="OrdenarFavoritosPicker"
+                Title="Ordenar favoritos"
+                SelectedIndexChanged="OnOrdenarFavoritosChanged">
+
+                <Picker.Items>
+                    <x:String>Más recientes</x:String>
+                    <x:String>Más antiguos</x:String>
+                </Picker.Items>
+
+            </Picker>
+
+            <CollectionView
+                x:Name="FavoritosCollection"
+                SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+
+                        <Border
+                            StrokeThickness="1"
+                            Padding="15"
+                            Margin="0,0,0,10">
+
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    Tapped="OnFavoritoTapped" />
+                            </Border.GestureRecognizers>
+
+                            <VerticalStackLayout Spacing="8">
+
+                                <Image
+                                    Source="{Binding ImagenUrl}"
+                                    HeightRequest="180"
+                                    Aspect="AspectFit" />
+
+                                <Label
+                                    Text="{Binding Nombre}"
+                                    FontSize="18"
+                                    FontAttributes="Bold" />
+
+                                <Label
+                                    Text="{Binding Precio, StringFormat='{}{0:C}'}"
+                                    FontSize="20" />
+
+                                <Label
+                                    Text="{Binding Condicion}" />
+
+                                <Label
+                                    Text="{Binding Estado}" />
+
+                                <Button
+                                    Text="🗑 Eliminar de favoritos"
+                                    Clicked="OnEliminarFavoritoClicked"
+                                    Margin="0,5,0,0" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+            <VerticalStackLayout
+            x:Name="SinFavoritosLayout"
+            Spacing="15"
+            HorizontalOptions="Center"
+            IsVisible="False"
+            Margin="0,40,0,0">
+
+                <Label
+            Text="❤️"
+            FontSize="50"
+            HorizontalOptions="Center" />
+
+                <Label
+            Text="Todavía no tienes favoritos"
+            FontSize="24"
+            FontAttributes="Bold"
+            HorizontalTextAlignment="Center" />
+
+                <Label
+            Text="Guarda los productos que te interesen para encontrarlos fácilmente después."
+            FontSize="16"
+            HorizontalTextAlignment="Center"
+            MaximumWidthRequest="320" />
+
+                <Button
+            Text="Explorar productos"
+            Clicked="OnExplorarProductosClicked"
+            Margin="0,10,0,0" />
+
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

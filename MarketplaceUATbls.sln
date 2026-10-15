@@ -1,0 +1,39 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37614.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarketplaceUAT.API", "MarketplaceUAT.API\MarketplaceUAT.API.csproj", "{4909C019-41EA-4CEE-BBB4-D232FAB956B1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarketplaceUAT.Data", "MarketplaceUAT.Data\MarketplaceUAT.Data.csproj", "{7A98FF91-498D-4B88-AB72-1875671E462E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarketplaceUAT.App", "MarketplaceUAT.App\MarketplaceUAT.App.csproj", "{1F5D12C3-E5C0-4AEC-986E-32C9C0579938}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4909C019-41EA-4CEE-BBB4-D232FAB956B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4909C019-41EA-4CEE-BBB4-D232FAB956B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4909C019-41EA-4CEE-BBB4-D232FAB956B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4909C019-41EA-4CEE-BBB4-D232FAB956B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7A98FF91-498D-4B88-AB72-1875671E462E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A98FF91-498D-4B88-AB72-1875671E462E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A98FF91-498D-4B88-AB72-1875671E462E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A98FF91-498D-4B88-AB72-1875671E462E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F5D12C3-E5C0-4AEC-986E-32C9C0579938}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F5D12C3-E5C0-4AEC-986E-32C9C0579938}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F5D12C3-E5C0-4AEC-986E-32C9C0579938}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{1F5D12C3-E5C0-4AEC-986E-32C9C0579938}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F5D12C3-E5C0-4AEC-986E-32C9C0579938}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F5D12C3-E5C0-4AEC-986E-32C9C0579938}.Release|Any CPU.Deploy.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D1536A31-808F-436B-AC41-080C1E9D4FB9}
+	EndGlobalSection
+EndGlobal

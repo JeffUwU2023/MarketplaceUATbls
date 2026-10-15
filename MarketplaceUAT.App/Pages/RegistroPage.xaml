@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="MarketplaceUAT.App.Pages.RegistroPage"
+    Title="Crear cuenta">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="20"
+            Spacing="15">
+
+            <Label
+                Text="Crear cuenta"
+                FontSize="30"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Regístrate para comprar y vender dentro de la comunidad universitaria."
+                FontSize="16"
+                HorizontalTextAlignment="Center"
+                Margin="0,0,0,10" />
+
+            <Label Text="Tipo de cuenta" />
+
+            <Picker
+                x:Name="TipoUsuarioPicker"
+                Title="Selecciona tu tipo de cuenta"
+                SelectedIndexChanged="OnTipoUsuarioChanged">
+                <Picker.Items>
+                    <x:String>Alumno</x:String>
+                    <x:String>Docente</x:String>
+                </Picker.Items>
+            </Picker>
+
+            <Entry
+                x:Name="NombresEntry"
+                Placeholder="Nombres" />
+
+            <Entry
+                x:Name="ApellidosEntry"
+                Placeholder="Apellidos" />
+
+            <VerticalStackLayout
+                x:Name="MatriculaLayout"
+                Spacing="5"
+                IsVisible="False">
+
+                <Entry
+                    x:Name="MatriculaEntry"
+                    Placeholder="Matrícula de 10 dígitos"
+                    Keyboard="Numeric"
+                    MaxLength="10" />
+
+            </VerticalStackLayout>
+
+            <Entry
+                x:Name="CorreoEntry"
+                Placeholder="Correo institucional"
+                Keyboard="Email" />
+
+            <Label
+                x:Name="CorreoAyudaLabel"
+                Text="Selecciona tu tipo de cuenta para ver el formato de correo requerido."
+                FontSize="12"
+                TextColor="Gray" />
+
+            <Grid ColumnDefinitions="*,Auto,Auto">
+
+                <Entry
+                    x:Name="PasswordEntry"
+                    Placeholder="Contraseña (8 a 20 caracteres)"
+                    IsPassword="True"
+                    MaxLength="20"
+                    Grid.Column="0" />
+
+                <Button
+                    x:Name="MostrarPasswordButton"
+                    ImageSource="ojo_abierto.svg"
+                    Clicked="OnMostrarPasswordClicked"
+                    WidthRequest="50"
+                    HeightRequest="50"
+                    Grid.Column="1" />
+
+                <Button
+                    Text="✕"
+                    Clicked="OnLimpiarPasswordClicked"
+                    WidthRequest="50"
+                    HeightRequest="50"
+                    Grid.Column="2" />
+
+            </Grid>
+
+            <Button
+                x:Name="RegistrarButton"
+                Text="Crear cuenta"
+                Clicked="OnRegistrarClicked"
+                Margin="0,10,0,0" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

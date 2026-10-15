@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             x:Class="MarketplaceUAT.App.Pages.ChatPage"
+             x:Name="ChatPageRoot"
+             Title="Chat">
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto"
+          Padding="15">
+
+        <!-- Título -->
+        <Label
+            x:Name="TituloChatLabel"
+            Text="Conversación"
+            FontSize="22"
+            FontAttributes="Bold"
+            Grid.Row="0"
+            Margin="0,0,0,10" />
+
+        <!-- Área de mensajes y flecha flotante -->
+        <Grid Grid.Row="1">
+
+            <Label
+                x:Name="CargandoMensajesLabel"
+                Text="Cargando mensajes..."
+                FontSize="15"
+                HorizontalOptions="Center"
+                VerticalOptions="Center"
+                IsVisible="False" />
+
+            <CollectionView
+                x:Name="MensajesCollectionView"
+                Scrolled="OnMensajesScrolled">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+
+                        <Grid>
+
+                            <!-- Mensajes de la otra persona -->
+                            <Border
+                                IsVisible="{Binding EsOtro}"
+                                HorizontalOptions="Start"
+                                Padding="10"
+                                Margin="0,5,50,5"
+                                StrokeShape="RoundRectangle 10">
+
+                                <VerticalStackLayout Spacing="5">
+
+                                    <Image
+                                        Source="{Binding UrlImagen}"
+                                        IsVisible="{Binding TieneImagen}"
+                                        HeightRequest="180"
+                                        WidthRequest="180"
+                                        Aspect="AspectFill" />
+
+                                    <ScrollView
+                                        Orientation="Horizontal"
+                                        IsVisible="{Binding TieneImagenes}"
+                                        HeightRequest="180"
+                                        WidthRequest="300">
+
+                                        <HorizontalStackLayout
+                                        BindableLayout.ItemsSource="{Binding Imagenes}"
+                                        Spacing="5">
+
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Image
+                                        Source="{Binding .}"
+                                        HeightRequest="160"
+                                        WidthRequest="160"
+                                        Aspect="AspectFill" />
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+
+                                        </HorizontalStackLayout>
+                                    </ScrollView>
+
+                                    <Label
+                                        Text="{Binding Contenido}"
+                                        FontSize="16"
+                                        IsVisible="{Binding Contenido}" />
+
+                                    <Label
+                                        Text="{Binding FechaEnvio, StringFormat='{0:dd/MM/yyyy HH:mm}'}"
+                                        FontSize="12"
+                                        Opacity="0.6" />
+
+                                </VerticalStackLayout>
+
+                            </Border>
+
+                            <!-- Mensajes propios -->
+                            <Border
+                                        x:Name="MensajePropioBorder"
+                                        IsVisible="{Binding EsMio}"
+                                        HorizontalOptions="End"
+                                        Padding="10"
+                                        Margin="50,5,0,5"
+                                        StrokeShape="RoundRectangle 10">
+
+                                <Border.Behaviors>
+                                    <toolkit:TouchBehavior
+                                        BindingContext="{Binding Source={x:Reference MensajePropioBorder}, Path=BindingContext}"
+                                        ShouldMakeChildrenInputTransparent="False"
+                                        LongPressDuration="1500"
+                                        LongPressCommand="{Binding Source={x:Reference ChatPageRoot}, Path=MostrarAccionesCommand}"
+                                        LongPressCommandParameter="{Binding Source={x:Reference MensajePropioBorder}, Path=BindingContext}" />
+                                </Border.Behaviors>
+
+                                <VerticalStackLayout Spacing="5">
+
+                                    <Image
+                                        Source="{Binding UrlImagen}"
+                                        IsVisible="{Binding TieneImagen}"
+                                        HeightRequest="180"
+                                        WidthRequest="180"
+                                        Aspect="AspectFill" />
+
+                                    <ScrollView
+                                        Orientation="Horizontal"
+                                        IsVisible="{Binding TieneImagenes}"
+                                        HeightRequest="180"
+                                        WidthRequest="300">
+
+                                        <HorizontalStackLayout
+                                        BindableLayout.ItemsSource="{Binding Imagenes}"
+                                        Spacing="5">
+
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Image
+                                        Source="{Binding .}"
+                                        HeightRequest="160"
+                                        WidthRequest="160"
+                                        Aspect="AspectFill" />
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+
+                                        </HorizontalStackLayout>
+                                    </ScrollView>
+
+                                    <Label
+                                        Text="{Binding Contenido}"
+                                        FontSize="16"
+                                        IsVisible="{Binding Contenido}" />
+
+                                    <Label
+                                        Text="{Binding FechaEnvio, StringFormat='{0:dd/MM/yyyy HH:mm}'}"
+                                        FontSize="12"
+                                        Opacity="0.6" />
+
+                                    <Label
+                                        Text="{Binding EstadoLectura}"
+                                        FontSize="12"
+                                        Opacity="0.6"
+                                        HorizontalOptions="End" />
+
+                                    <Button
+                                        Text="✏️ Editar"
+                                        FontSize="12"
+                                        Padding="8,4"
+                                        BackgroundColor="Transparent"
+                                        TextColor="#2563EB"
+                                        CommandParameter="{Binding .}"
+                                        IsVisible="{Binding MostrarAcciones}"
+                                        Clicked="OnEditarMensajeClicked" />
+
+                                    <Button
+                                        Text="🗑️ Eliminar"
+                                        FontSize="12"
+                                        Padding="8,4"
+                                        BackgroundColor="Transparent"
+                                        TextColor="Red"
+                                        CommandParameter="{Binding .}"
+                                        IsVisible="{Binding MostrarAcciones}"
+                                        Clicked="OnEliminarMensajeClicked" />
+
+                                </VerticalStackLayout>
+
+                            </Border>
+
+                        </Grid>
+
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+                <CollectionView.EmptyView>
+                    <Label
+                        Text="No hay mensajes todavía."
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center" />
+                </CollectionView.EmptyView>
+
+            </CollectionView>
+
+            <!-- Flecha flotante para mensajes nuevos -->
+            <Button
+                x:Name="NuevosMensajesButton"
+                Text="↓"
+                FontSize="26"
+                FontAttributes="Bold"
+                WidthRequest="50"
+                HeightRequest="50"
+                CornerRadius="25"
+                Padding="0"
+                BackgroundColor="#2563EB"
+                TextColor="White"
+                HorizontalOptions="End"
+                VerticalOptions="End"
+                Margin="0,0,12,12"
+                IsVisible="False"
+                ZIndex="10"
+                SemanticProperties.Description="Ir a los mensajes más recientes"
+                Clicked="OnNuevosMensajesClicked" />
+
+        </Grid>
+
+        <!-- Vista previa de imágenes seleccionadas -->
+        <Border
+            x:Name="ImagenPreviewBorder"
+            Grid.Row="2"
+            IsVisible="False"
+            Padding="5"
+            Margin="0,5,0,5"
+            StrokeShape="RoundRectangle 10">
+
+            <CollectionView
+                x:Name="ImagenesPreviewCollectionView"
+                HeightRequest="130"
+                ItemsLayout="HorizontalList"
+                SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+
+                        <Grid
+                            HeightRequest="120"
+                            WidthRequest="120"
+                            Margin="0,0,8,0">
+
+                            <Border
+                                Padding="2"
+                                StrokeShape="RoundRectangle 8">
+
+                                <Image
+                                    Source="{Binding FullPath}"
+                                    HeightRequest="120"
+                                    WidthRequest="120"
+                                    Aspect="AspectFill" />
+
+                            </Border>
+
+                            <Button
+                                Text="✕"
+                                FontSize="14"
+                                WidthRequest="30"
+                                HeightRequest="30"
+                                Padding="0"
+                                HorizontalOptions="End"
+                                VerticalOptions="Start"
+                                BackgroundColor="Black"
+                                TextColor="White"
+                                CornerRadius="15"
+                                CommandParameter="{Binding .}"
+                                Clicked="OnEliminarImagenSeleccionadaClicked" />
+
+                        </Grid>
+
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+
+        </Border>
+
+        <!-- Campo para escribir y enviar mensajes -->
+        <Grid
+            Grid.Row="3"
+            ColumnDefinitions="50,*,80"
+            ColumnSpacing="8"
+            Margin="0,10,0,0">
+
+            <Button
+                Text="🖼️"
+                Grid.Column="0"
+                HeightRequest="50"
+                WidthRequest="50"
+                Clicked="OnSeleccionarImagenClicked" />
+
+            <Entry
+                x:Name="MensajeEntry"
+                Placeholder="Escribe un mensaje..."
+                Grid.Column="1"
+                VerticalOptions="Center" />
+
+            <Button
+                x:Name="EnviarMensajeButton"
+                Text="Enviar"
+                Grid.Column="2"
+                HeightRequest="50"
+                Clicked="OnEnviarMensajeClicked" />
+
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

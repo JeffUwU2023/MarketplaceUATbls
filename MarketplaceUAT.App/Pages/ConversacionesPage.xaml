@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MarketplaceUAT.App.Pages.ConversacionesPage"
+             Title="Mis conversaciones">
+
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Padding="15">
+
+        <Label
+            Text="Mis conversaciones"
+            FontSize="28"
+            FontAttributes="Bold"
+            Grid.Row="0"
+            Margin="0,0,0,15" />
+
+        <Entry
+            x:Name="BuscarConversacionEntry"
+            Grid.Row="1"
+            Placeholder="Buscar por producto o usuario..."
+            ClearButtonVisibility="WhileEditing"
+            TextChanged="OnBuscarConversacionTextChanged"
+            Margin="0,0,0,8" />
+
+        <Picker
+            x:Name="OrdenarConversacionesPicker"
+            Grid.Row="2"
+            Title="Ordenar conversaciones"
+            SelectedIndexChanged="OnOrdenarConversacionesChanged">
+            <Picker.Items>
+                <x:String>Más recientes</x:String>
+                <x:String>Más antiguas</x:String>
+            </Picker.Items>
+        </Picker>
+
+        <Picker
+    x:Name="BuscarPorConversacionPicker"
+    Title="Buscar por..."
+    Grid.Row="3"
+    SelectedIndexChanged="OnBuscarPorConversacionChanged">
+            <Picker.Items>
+                <x:String>Producto</x:String>
+                <x:String>Usuario</x:String>
+            </Picker.Items>
+        </Picker>
+
+        <CollectionView
+            x:Name="ConversacionesCollectionView"
+            Grid.Row="4"
+            SelectionMode="Single"
+            SelectionChanged="OnConversacionSeleccionada">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+
+                    <Border
+            Padding="15"
+            Margin="0,5"
+            StrokeShape="RoundRectangle 10">
+
+                        <VerticalStackLayout
+                Spacing="5">
+
+                            <Label
+                    Text="{Binding NombreProducto}"
+                    FontSize="18"
+                    FontAttributes="Bold" />
+
+                            <Label
+                    Text="{Binding NombreOtroUsuario, StringFormat='Conversando con: {0}'}"
+                    FontSize="14"
+                    Opacity="0.7" />
+                            <Label
+                    Text="{Binding UltimaActividad, StringFormat='Última actividad: {0:dd/MM/yyyy HH:mm}'}"
+                    FontSize="13"
+                    Opacity="0.6" />
+
+                            <Label
+                    Text="{Binding Archivada, StringFormat='Archivada: {0}'}"
+                    FontSize="13"
+                    Opacity="0.6" />
+
+                        </VerticalStackLayout>
+
+                    </Border>
+
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+            <CollectionView.EmptyView>
+                <VerticalStackLayout
+        HorizontalOptions="Center"
+        VerticalOptions="Center"
+        Spacing="10">
+
+                    <Label
+            Text="💬"
+            FontSize="50"
+            HorizontalOptions="Center" />
+
+                    <Label
+            Text="No tienes conversaciones todavía."
+            FontSize="17"
+            HorizontalOptions="Center"
+            HorizontalTextAlignment="Center" />
+
+                    <Label
+            Text="Aquí aparecerán tus conversaciones con vendedores y compradores."
+            FontSize="14"
+            Opacity="0.7"
+            HorizontalOptions="Center"
+            HorizontalTextAlignment="Center"
+            Margin="20,0" />
+
+                    <Button
+            Text="Explorar publicaciones"
+            Clicked="OnExplorarPublicacionesClicked"
+            Margin="0,5,0,0" />
+
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
+        </CollectionView>
+
+    </Grid>
+
+</ContentPage>
