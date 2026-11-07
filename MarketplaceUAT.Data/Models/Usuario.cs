@@ -10,6 +10,8 @@
 
         public string TipoUsuario { get; set; } = string.Empty;
 
+        public bool EsAdministrador { get; set; } = false;
+
         public string? Matricula { get; set; }
 
         public string Correo { get; set; } = string.Empty;

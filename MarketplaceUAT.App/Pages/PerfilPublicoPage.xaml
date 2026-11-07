@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="MarketplaceUAT.App.Pages.PerfilPublicoPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Perfil del usuario"
+    BackgroundColor="{AppThemeBinding Light=#F5F6FA, Dark=#181818}">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="24,28"
+            Spacing="20">
+
+            <!-- Fotografía o avatar predeterminado -->
+            <Border
+                WidthRequest="110"
+                HeightRequest="110"
+                StrokeThickness="0"
+                BackgroundColor="#DCE8FF"
+                StrokeShape="RoundRectangle 55"
+                HorizontalOptions="Center">
+
+                <Grid
+                    WidthRequest="110"
+                    HeightRequest="110">
+
+                    <Image
+                        x:Name="FotoPerfilImage"
+                        Aspect="AspectFill"
+                        IsVisible="False" />
+
+                    <Label
+                        x:Name="FotoPerfilPlaceholder"
+                        Text="👤"
+                        FontSize="50"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center" />
+
+                </Grid>
+            </Border>
+
+            <!-- Nombre y descripción -->
+            <VerticalStackLayout Spacing="5">
+                <Label
+                    x:Name="NombreCompletoLabel"
+                    Text="Cargando perfil..."
+                    FontSize="26"
+                    FontAttributes="Bold"
+                    HorizontalTextAlignment="Center"
+                    TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+                <Label
+                    Text="Perfil de la comunidad universitaria"
+                    FontSize="14"
+                    HorizontalTextAlignment="Center"
+                    TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+            </VerticalStackLayout>
+
+            <!-- Resumen de actividad del usuario -->
+            <VerticalStackLayout Spacing="12">
+
+                <Label
+        Text="Actividad en Marketplace"
+        FontSize="21"
+        FontAttributes="Bold"
+        TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+                <Grid
+        ColumnDefinitions="*,*,*"
+        ColumnSpacing="8">
+
+                    <!-- Total de publicaciones -->
+                    <Border
+            Grid.Column="0"
+            Padding="10,14"
+            StrokeThickness="1"
+            Stroke="{AppThemeBinding Light=#E1E5EC, Dark=#343840}"
+            BackgroundColor="{AppThemeBinding Light=White, Dark=#20232A}"
+            StrokeShape="RoundRectangle 14">
+
+                        <VerticalStackLayout Spacing="6">
+                            <Label
+                    Text="Publicaciones"
+                    FontSize="11"
+                    HorizontalTextAlignment="Center"
+                    TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+
+                            <Label
+                    x:Name="TotalPublicacionesLabel"
+                    Text="—"
+                    FontSize="25"
+                    FontAttributes="Bold"
+                    HorizontalTextAlignment="Center"
+                    TextColor="#4169E1" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Productos disponibles -->
+                    <Border
+            Grid.Column="1"
+            Padding="10,14"
+            StrokeThickness="1"
+            Stroke="{AppThemeBinding Light=#E1E5EC, Dark=#343840}"
+            BackgroundColor="{AppThemeBinding Light=White, Dark=#20232A}"
+            StrokeShape="RoundRectangle 14">
+
+                        <VerticalStackLayout Spacing="6">
+                            <Label
+                    Text="Disponibles"
+                    FontSize="11"
+                    HorizontalTextAlignment="Center"
+                    TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+
+                            <Label
+                    x:Name="TotalDisponiblesLabel"
+                    Text="—"
+                    FontSize="25"
+                    FontAttributes="Bold"
+                    HorizontalTextAlignment="Center"
+                    TextColor="#218838" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Productos reservados -->
+                    <Border
+            Grid.Column="2"
+            Padding="10,14"
+            StrokeThickness="1"
+            Stroke="{AppThemeBinding Light=#E1E5EC, Dark=#343840}"
+            BackgroundColor="{AppThemeBinding Light=White, Dark=#20232A}"
+            StrokeShape="RoundRectangle 14">
+
+                        <VerticalStackLayout Spacing="6">
+                            <Label
+                    Text="Reservados"
+                    FontSize="11"
+                    HorizontalTextAlignment="Center"
+                    TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+
+                            <Label
+                    x:Name="TotalReservadosLabel"
+                    Text="—"
+                    FontSize="25"
+                    FontAttributes="Bold"
+                    HorizontalTextAlignment="Center"
+                    TextColor="#C47B12" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                </Grid>
+            </VerticalStackLayout>
+
+            <!-- Información pública -->
+            <Border
+                Padding="18"
+                StrokeThickness="1"
+                Stroke="{AppThemeBinding Light=#E1E5EC, Dark=#343840}"
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#20232A}"
+                StrokeShape="RoundRectangle 16">
+
+                <VerticalStackLayout Spacing="16">
+
+                    <Label
+                        Text="Información del usuario"
+                        FontSize="18"
+                        FontAttributes="Bold"
+                        TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label
+                            Text="Nombres"
+                            FontSize="13"
+                            TextColor="{AppThemeBinding Light=#777777, Dark=#BBBBBB}" />
+                        <Label
+                            x:Name="NombresLabel"
+                            FontSize="16"
+                            TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label
+                            Text="Apellidos"
+                            FontSize="13"
+                            TextColor="{AppThemeBinding Light=#777777, Dark=#BBBBBB}" />
+                        <Label
+                            x:Name="ApellidosLabel"
+                            FontSize="16"
+                            TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label
+                            Text="Tipo de usuario"
+                            FontSize="13"
+                            TextColor="{AppThemeBinding Light=#777777, Dark=#BBBBBB}" />
+                        <Label
+                            x:Name="TipoUsuarioLabel"
+                            FontSize="16"
+                            TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        x:Name="CorreoLayout"
+                        Spacing="4">
+                        <Label
+                            Text="Correo electrónico"
+                            FontSize="13"
+                            TextColor="{AppThemeBinding Light=#777777, Dark=#BBBBBB}" />
+                        <Label
+                            x:Name="CorreoLabel"
+                            FontSize="16"
+                            LineBreakMode="WordWrap"
+                            TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label
+                            Text="Miembro desde"
+                            FontSize="13"
+                            TextColor="{AppThemeBinding Light=#777777, Dark=#BBBBBB}" />
+                        <Label
+                            x:Name="FechaRegistroLabel"
+                            FontSize="16"
+                            TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Publicaciones del usuario -->
+            <VerticalStackLayout Spacing="12">
+
+                <Label
+        Text="Publicaciones del usuario"
+        FontSize="21"
+        FontAttributes="Bold"
+        TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+                <Label
+        x:Name="SinPublicacionesLabel"
+        Text="Este usuario todavía no tiene publicaciones disponibles."
+        IsVisible="False"
+        FontSize="14"
+        HorizontalTextAlignment="Center"
+        TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}"
+        Margin="0,10" />
+
+                <CollectionView
+        x:Name="PublicacionesCollection"
+        SelectionMode="None"
+        ItemsLayout="VerticalGrid, 3"
+        VerticalScrollBarVisibility="Never">
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border
+                    Margin="3"
+                    Padding="6"
+                    Stroke="{AppThemeBinding Light=#E2E2E2, Dark=#3A3A3A}"
+                    StrokeThickness="1"
+                    BackgroundColor="{AppThemeBinding Light=White, Dark=#242424}"
+                    StrokeShape="RoundRectangle 12">
+
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer
+                            Tapped="OnPublicacionTapped" />
+                                </Border.GestureRecognizers>
+
+                                <Grid RowDefinitions="110,Auto,Auto,Auto,Auto"
+                          RowSpacing="4">
+
+                                    <Image
+                            Grid.Row="0"
+                            Source="{Binding ImagenUrl}"
+                            Aspect="AspectFill"
+                            HeightRequest="110"
+                            HorizontalOptions="Fill"
+                            VerticalOptions="Fill" />
+
+                                    <Label
+                            Grid.Row="1"
+                            Text="{Binding Nombre}"
+                            FontSize="12"
+                            MaxLines="2"
+                            LineBreakMode="TailTruncation"
+                            TextColor="{AppThemeBinding Light=#222222, Dark=White}" />
+
+                                    <Label
+                            Grid.Row="2"
+                            Text="{Binding Precio, StringFormat='{}{0:C}'}"
+                            FontSize="14"
+                            FontAttributes="Bold"
+                            TextColor="{AppThemeBinding Light=#147D3F, Dark=#70D99A}" />
+
+                                    <Label
+                            Grid.Row="3"
+                            Text="{Binding Condicion}"
+                            FontSize="10"
+                            TextColor="Gray"
+                            LineBreakMode="TailTruncation" />
+
+                                    <Label
+                            Grid.Row="4"
+                            Text="{Binding EstadoTexto}"
+                            FontSize="10"
+                            FontAttributes="Bold"
+                            LineBreakMode="TailTruncation"
+                            TextColor="{AppThemeBinding Light=#444444, Dark=#DDDDDD}" />
+
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </VerticalStackLayout>
+
+
+            <!-- Indicador y errores -->
+            <ActivityIndicator
+                x:Name="IndicadorCarga"
+                IsRunning="False"
+                IsVisible="False"
+                Color="#4169E1"
+                HorizontalOptions="Center" />
+
+            <Label
+                x:Name="MensajeErrorLabel"
+                IsVisible="False"
+                HorizontalTextAlignment="Center"
+                TextColor="#D64545"
+                FontSize="14" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

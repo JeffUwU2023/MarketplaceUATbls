@@ -9,6 +9,9 @@ namespace MarketplaceUAT.API.DTOs
             ErrorMessage = "La conversación no es válida.")]
         public int IdConversacion { get; set; }
 
+        [Required(ErrorMessage = "El identificador de solicitud es obligatorio.")]
+        public Guid IdSolicitud { get; set; }
+
         [StringLength(1000,
         ErrorMessage = "El mensaje no puede superar los 1000 caracteres.")]
         public string? Contenido { get; set; }

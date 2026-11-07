@@ -1,14 +1,15 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
 
 namespace MarketplaceUAT.Data.Models
 {
     public class Producto
     {
         public int IdProducto { get; set; }
+
+        public bool EsProductoUnico { get; set; } = true;
+
+        public int CantidadDisponible { get; set; } = 1;
 
         public int IdUsuario { get; set; }
 
@@ -27,5 +28,8 @@ namespace MarketplaceUAT.Data.Models
         public DateTime FechaPublicacion { get; set; }
 
         public bool Activo { get; set; }
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     }
 }

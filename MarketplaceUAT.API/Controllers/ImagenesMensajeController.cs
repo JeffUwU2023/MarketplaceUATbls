@@ -39,13 +39,21 @@ namespace MarketplaceUAT.API.Controllers
         }
 
         private async Task<bool> EsParticipanteDelMensaje(
-            int idMensaje,
-            int idUsuario)
+    int idMensaje,
+    int idUsuario)
         {
+            if (idMensaje <= 0 || idUsuario <= 0)
+                return false;
+
             return await _context.Mensajes
-                .Where(m => m.IdMensaje == idMensaje && m.Activo)
+                .AsNoTracking()
+                .Where(m =>
+                    m.IdMensaje == idMensaje &&
+                    m.Activo)
                 .Join(
-                    _context.Conversaciones,
+                    _context.Conversaciones
+                        .AsNoTracking()
+                        .Where(c => c.Activa),
                     m => m.IdConversacion,
                     c => c.IdConversacion,
                     (m, c) => c)
@@ -66,20 +74,100 @@ namespace MarketplaceUAT.API.Controllers
 
         private string ObtenerCarpetaImagenes(int idConversacion)
         {
-            string carpetaBase = Path.Combine(
-                _environment.WebRootPath ?? Path.Combine(
-                    Directory.GetCurrentDirectory(),
-                    "wwwroot"),
-                "Images");
+            if (idConversacion <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(idConversacion),
+                    "El identificador de la conversación debe ser positivo.");
+            }
 
-            string carpetaChat = Path.Combine(
-                carpetaBase,
-                "Chat",
-                idConversacion.ToString());
+            string carpetaBase = Path.GetFullPath(
+                Path.Combine(
+                    _environment.WebRootPath ?? Path.Combine(
+                        Directory.GetCurrentDirectory(),
+                        "wwwroot"),
+                    "Images",
+                    "Chat"));
+
+            string carpetaChat = Path.GetFullPath(
+                Path.Combine(
+                    carpetaBase,
+                    idConversacion.ToString()));
+
+            string carpetaBaseConSeparador =
+                carpetaBase.TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+
+            if (!carpetaChat.StartsWith(
+                    carpetaBaseConSeparador,
+                    OperatingSystem.IsWindows()
+                        ? StringComparison.OrdinalIgnoreCase
+                        : StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "La ruta de imágenes está fuera de la carpeta permitida.");
+            }
 
             Directory.CreateDirectory(carpetaChat);
 
             return carpetaChat;
+        }
+
+        private bool IntentarEliminarArchivoSubido(
+    int idConversacion,
+    string nombreArchivo)
+        {
+            if (idConversacion <= 0 ||
+                string.IsNullOrWhiteSpace(nombreArchivo) ||
+                nombreArchivo != Path.GetFileName(nombreArchivo))
+            {
+                return false;
+            }
+
+            string extension = Path.GetExtension(nombreArchivo)
+                .ToLowerInvariant();
+
+            if (!ExtensionesPermitidas.Contains(extension))
+            {
+                return false;
+            }
+
+            string carpeta = Path.GetFullPath(
+                ObtenerCarpetaImagenes(idConversacion));
+
+            string rutaArchivo = Path.GetFullPath(
+                Path.Combine(carpeta, nombreArchivo));
+
+            // Confirma que el archivo esté directamente dentro de la carpeta esperada.
+            if (!string.Equals(
+                Path.GetDirectoryName(rutaArchivo),
+                carpeta,
+                OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            try
+            {
+                if (System.IO.File.Exists(rutaArchivo))
+                {
+                    System.IO.File.Delete(rutaArchivo);
+                }
+
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
 
         private static bool EsImagenValida(
@@ -123,9 +211,9 @@ namespace MarketplaceUAT.API.Controllers
         }
 
         private bool IntentarObtenerNombreArchivo(
-        string urlImagen,
-        out string nombreArchivo,
-        out int idConversacion)
+    string urlImagen,
+    out string nombreArchivo,
+    out int idConversacion)
         {
             nombreArchivo = string.Empty;
             idConversacion = 0;
@@ -138,8 +226,22 @@ namespace MarketplaceUAT.API.Controllers
                 return false;
             }
 
+            // Solo se permiten los protocolos HTTP y HTTPS.
             if (uri.Scheme != Uri.UriSchemeHttp &&
                 uri.Scheme != Uri.UriSchemeHttps)
+            {
+                return false;
+            }
+
+            // Rechaza URL que incluyan credenciales.
+            if (!string.IsNullOrEmpty(uri.UserInfo))
+            {
+                return false;
+            }
+
+            // No se necesitan parámetros ni fragmentos en la URL.
+            if (!string.IsNullOrEmpty(uri.Query) ||
+                !string.IsNullOrEmpty(uri.Fragment))
             {
                 return false;
             }
@@ -152,8 +254,12 @@ namespace MarketplaceUAT.API.Controllers
                 return false;
             }
 
-            // La URL debe pertenecer al servidor actual.
-            if (!uri.Host.Equals(
+            // La URL debe pertenecer al servidor actual
+            // y utilizar el mismo esquema, host y puerto.
+            if (!uri.Scheme.Equals(
+                    Request.Scheme,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !uri.Host.Equals(
                     Request.Host.Host,
                     StringComparison.OrdinalIgnoreCase) ||
                 uri.Port != Request.Host.Port)
@@ -165,6 +271,13 @@ namespace MarketplaceUAT.API.Controllers
                 '/',
                 StringSplitOptions.RemoveEmptyEntries);
 
+            // Rechaza segmentos de ruta codificados.
+            if (segmentos.Any(segmento =>
+                    Uri.UnescapeDataString(segmento) != segmento))
+            {
+                return false;
+            }
+
             // Ruta esperada: Images/Chat/{idConversacion}/{archivo}
             if (segmentos.Length != 4 ||
                 !segmentos[0].Equals(
@@ -173,21 +286,26 @@ namespace MarketplaceUAT.API.Controllers
                 !segmentos[1].Equals(
                     "Chat",
                     StringComparison.OrdinalIgnoreCase) ||
-                !int.TryParse(segmentos[2], out idConversacion) ||
+                !int.TryParse(
+                    segmentos[2],
+                    out idConversacion) ||
                 idConversacion <= 0)
             {
+                idConversacion = 0;
                 return false;
             }
 
             nombreArchivo = segmentos[3];
 
-            // Evita nombres de archivo con rutas o separadores.
+            // Evita nombres vacíos, rutas y separadores.
             if (string.IsNullOrWhiteSpace(nombreArchivo) ||
                 nombreArchivo != Path.GetFileName(nombreArchivo) ||
                 nombreArchivo.Contains('\\') ||
+                nombreArchivo.Contains('/') ||
                 nombreArchivo.Contains(':'))
             {
                 nombreArchivo = string.Empty;
+                idConversacion = 0;
                 return false;
             }
 
@@ -200,7 +318,11 @@ namespace MarketplaceUAT.API.Controllers
             if (!IntentarObtenerUsuario(out int idUsuario))
                 return Unauthorized();
 
+            if (id <= 0)
+                return BadRequest("El identificador de la imagen no es válido.");
+
             var imagen = await _context.ImagenesMensajes
+                .AsNoTracking()
                 .FirstOrDefaultAsync(i =>
                     i.IdImagenMensaje == id &&
                     i.Activo);
@@ -330,7 +452,42 @@ namespace MarketplaceUAT.API.Controllers
 
             _context.ImagenesMensajes.Add(imagen);
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                _context.Entry(imagen).State = EntityState.Detached;
+
+                bool archivoReferenciado = await _context.ImagenesMensajes
+                    .AsNoTracking()
+                    .AnyAsync(i => i.UrlImagen == dto.UrlImagen.Trim());
+
+                if (archivoReferenciado)
+                {
+                    return StatusCode(
+                        StatusCodes.Status500InternalServerError,
+                        "No fue posible registrar la imagen. " +
+                        "El archivo se conserva porque está referenciado.");
+                }
+
+                bool archivoEliminado = IntentarEliminarArchivoSubido(
+                    idConversacionImagen,
+                    nombreArchivo);
+
+                if (!archivoEliminado)
+                {
+                    Console.Error.WriteLine(
+                        $"No se pudo limpiar la imagen {nombreArchivo} " +
+                        $"de la conversación {idConversacionImagen}.");
+                }
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    "No fue posible registrar la imagen del mensaje. " +
+                    "Se intentó limpiar el archivo subido.");
+            }
 
             return Ok(imagen);
         }
@@ -395,32 +552,65 @@ namespace MarketplaceUAT.API.Controllers
                     "No se pueden subir imágenes a una conversación archivada o inactiva.");
             }
 
-            byte[] datos;
-
-            await using (var memoria = new MemoryStream())
-            {
-                await archivo.CopyToAsync(memoria);
-                datos = memoria.ToArray();
-            }
-
-            if (!EsImagenValida(datos, extension))
-            {
-                return BadRequest(
-                    "El contenido no corresponde a una imagen válida.");
-            }
-
-            // Guarda la imagen dentro de la carpeta de esta conversación.
+            // Guarda primero la imagen en un archivo temporal.
             string carpeta = ObtenerCarpetaImagenes(idConversacion);
 
             string nombreArchivo = $"{Guid.NewGuid():N}{extension}";
-
             string rutaArchivo = Path.Combine(carpeta, nombreArchivo);
+
+            string nombreTemporal = $"{Guid.NewGuid():N}.uploadtmp";
+            string rutaTemporal = Path.Combine(carpeta, nombreTemporal);
 
             try
             {
-                await System.IO.File.WriteAllBytesAsync(
-                    rutaArchivo,
-                    datos);
+                await using (var flujoArchivo = new FileStream(
+                    rutaTemporal,
+                    FileMode.CreateNew,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    81920,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan))
+                {
+                    // Copia el archivo al disco sin cargarlo completo en memoria,
+                    // comprobando también el tamaño real durante la copia.
+                    await using var flujoEntrada = archivo.OpenReadStream();
+
+                    byte[] buffer = new byte[81920];
+                    long bytesCopiados = 0;
+                    int bytesLeidosCopia;
+
+                    while ((bytesLeidosCopia = await flujoEntrada.ReadAsync(
+                        buffer.AsMemory(0, buffer.Length))) > 0)
+                    {
+                        bytesCopiados += bytesLeidosCopia;
+
+                        if (bytesCopiados > TamanoMaximoArchivo)
+                        {
+                            return BadRequest(
+                                "La imagen no puede superar los 20 MB.");
+                        }
+
+                        await flujoArchivo.WriteAsync(
+                            buffer.AsMemory(0, bytesLeidosCopia));
+                    }
+
+                    // Lee únicamente los primeros 12 bytes para validar la firma.
+                    flujoArchivo.Position = 0;
+
+                    byte[] firma = new byte[12];
+
+                    int bytesLeidos = await flujoArchivo.ReadAsync(
+                        firma.AsMemory(0, firma.Length));
+
+                    if (!EsImagenValida(firma[..bytesLeidos], extension))
+                    {
+                        return BadRequest(
+                            "El contenido no corresponde a una imagen válida.");
+                    }
+                }
+
+                // El archivo temporal y el definitivo están en la misma carpeta.
+                System.IO.File.Move(rutaTemporal, rutaArchivo);
             }
             catch (IOException)
             {
@@ -433,6 +623,25 @@ namespace MarketplaceUAT.API.Controllers
                 return StatusCode(
                     StatusCodes.Status500InternalServerError,
                     "El servidor no tiene permiso para guardar la imagen.");
+            }
+            finally
+            {
+                // Limpia el temporal si la validación o el guardado fallan.
+                try
+                {
+                    if (System.IO.File.Exists(rutaTemporal))
+                    {
+                        System.IO.File.Delete(rutaTemporal);
+                    }
+                }
+                catch (IOException)
+                {
+                    // Evita que un fallo de limpieza oculte el resultado original.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // El archivo temporal podrá limpiarse posteriormente.
+                }
             }
 
             // Devuelve la URL pública de la imagen.
@@ -461,6 +670,7 @@ namespace MarketplaceUAT.API.Controllers
             if (imagen == null)
                 return NotFound("La imagen no existe.");
 
+
             if (!await EsPropietarioDelMensaje(
                     imagen.IdMensaje,
                     idUsuario))
@@ -468,9 +678,34 @@ namespace MarketplaceUAT.API.Controllers
                 return Forbid();
             }
 
+            var mensaje = await _context.Mensajes
+                .FirstOrDefaultAsync(m =>
+                    m.IdMensaje == imagen.IdMensaje &&
+                    m.Activo);
+
+            if (mensaje == null)
+            {
+                return NotFound("El mensaje no existe.");
+            }
+
+            var conversacion = await _context.Conversaciones
+                .FirstOrDefaultAsync(c =>
+                    c.IdConversacion == mensaje.IdConversacion);
+
+            if (conversacion == null)
+            {
+                return NotFound("La conversación no existe.");
+            }
+
+            if (!conversacion.Activa || conversacion.Archivada)
+            {
+                return Conflict(
+                    "No puedes eliminar imágenes de una conversación archivada.");
+            }
+
             // Desactiva el registro, pero conserva el archivo físico.
-            // Así se evita borrar accidentalmente archivos compartidos.
             imagen.Activo = false;
+
 
             await _context.SaveChangesAsync();
 

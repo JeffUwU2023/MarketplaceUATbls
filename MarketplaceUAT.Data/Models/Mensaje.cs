@@ -20,5 +20,7 @@ namespace MarketplaceUAT.Data.Models
         public bool Visto { get; set; }
 
         public bool Activo { get; set; }
+
+        public Guid? IdSolicitud { get; set; }
     }
 }

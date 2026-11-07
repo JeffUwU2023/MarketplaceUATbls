@@ -8,6 +8,9 @@ namespace MarketplaceUAT.App.Pages
 {
     public partial class FavoritosPage : ContentPage
     {
+        private ApiClient Api =>
+        Application.Current!.Handler.MauiContext!.Services
+        .GetRequiredService<ApiClient>();
         private List<FavoritoProducto> TodosLosFavoritos = new();
         private string OrdenSeleccionado = "Más recientes";
         public FavoritosPage()
@@ -34,12 +37,13 @@ namespace MarketplaceUAT.App.Pages
                     return;
                 }
 
-                var api = new ApiClient();
-                var client = api.Client;
-
                 string url = $"{ApiConfig.BaseUrl}/api/Favoritos";
 
-                var response = await client.GetAsync(url);
+                using var response = await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Get, url));
+
+                if (await ManejarSesionExpiradaAsync((response)))
+                    return;
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -72,9 +76,11 @@ namespace MarketplaceUAT.App.Pages
                 foreach (var favorito in favoritosUsuario)
                 {
                     string productoUrl =
-                        $"{ApiConfig.BaseUrl}/api/Productos/{favorito.IdProducto}";
+                         $"{ApiConfig.BaseUrl}/api/Productos/DetalleFavorito/{favorito.IdProducto}";
 
-                    var productoResponse = await client.GetAsync(productoUrl);
+                    using var productoResponse =
+                    await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Get, productoUrl));
 
                     if (!productoResponse.IsSuccessStatusCode)
                     {
@@ -96,7 +102,9 @@ namespace MarketplaceUAT.App.Pages
                         string imagenUrl =
                             $"{ApiConfig.BaseUrl}/api/ImagenesProducto/Producto/{producto.IdProducto}";
 
-                        var imagenResponse = await client.GetAsync(imagenUrl);
+                        using var imagenResponse =
+    await Api.EnviarAutenticadoAsync(() =>
+        new HttpRequestMessage(HttpMethod.Get, imagenUrl));
 
                         if (imagenResponse.IsSuccessStatusCode)
                         {
@@ -132,6 +140,7 @@ namespace MarketplaceUAT.App.Pages
                             Precio = producto.Precio,
                             Condicion = producto.Condicion,
                             Estado = producto.Estado,
+                            Activo = producto.Activo,
                             ImagenUrl = producto.ImagenUrl
                         });
                     }
@@ -255,15 +264,11 @@ namespace MarketplaceUAT.App.Pages
                     return;
                 }
 
-                var api = new ApiClient();
-                var client = api.Client;
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
                 string url =
-                    $"{ApiConfig.BaseUrl}/api/Favoritos/{favorito.IdFavorito}";
+    $"{ApiConfig.BaseUrl}/api/Favoritos/{favorito.IdFavorito}";
 
-                var response = await client.DeleteAsync(url);
+                using var response = await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Delete, url));
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -295,6 +300,27 @@ namespace MarketplaceUAT.App.Pages
         private async void OnExplorarProductosClicked(object sender, EventArgs e)
         {
             await Shell.Current.GoToAsync("//MainPage");
+        }
+
+        private async Task<bool> ManejarSesionExpiradaAsync(
+    HttpResponseMessage response)
+        {
+            if (response.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+                return false;
+
+            await SesionUsuario.CerrarSesionAsync();
+
+            await DisplayAlertAsync(
+                "Sesión expirada",
+                "Tu sesión ya no es válida. Inicia sesión nuevamente.",
+                "OK");
+
+            if (Shell.Current != null)
+            {
+                await Shell.Current.GoToAsync(nameof(LoginPage));
+            }
+
+            return true;
         }
     }
 }

@@ -20,9 +20,9 @@ namespace MarketplaceUAT.API.DTOs
         public string TipoUsuario { get; set; } = string.Empty;
 
         [StringLength(10,
-            ErrorMessage = "La matrícula no puede superar los 10 dígitos.")]
-        [RegularExpression("^[0-9]{10}$",
-            ErrorMessage = "La matrícula debe contener exactamente 10 dígitos.")]
+    ErrorMessage = "La matrícula no puede superar los 10 dígitos.")]
+        [RegularExpression(@"^$|^[0-9]{10}$",
+    ErrorMessage = "La matrícula debe estar vacía o contener exactamente 10 dígitos.")]
         public string? Matricula { get; set; }
 
         [Required(ErrorMessage = "El correo es obligatorio.")]
@@ -32,8 +32,8 @@ namespace MarketplaceUAT.API.DTOs
         public string Correo { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "La contraseña es obligatoria.")]
-        [StringLength(20, MinimumLength = 8,
-            ErrorMessage = "La contraseña debe tener entre 8 y 20 caracteres.")]
+        [StringLength(128, MinimumLength = 8,
+            ErrorMessage = "La contraseña debe tener entre 8 y 128 caracteres.")]
         public string Password { get; set; } = string.Empty;
     }
 }

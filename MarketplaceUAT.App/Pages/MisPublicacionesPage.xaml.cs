@@ -1,11 +1,23 @@
 using MarketplaceUAT.App.Config;
 using MarketplaceUAT.App.Models;
+using MarketplaceUAT.App.Services;
+using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MarketplaceUAT.App.Pages
 {
     public partial class MisPublicacionesPage : ContentPage
     {
+        private ApiClient Api =>
+        Application.Current!.Handler.MauiContext!.Services
+        .GetRequiredService<ApiClient>();
+        private class CompradorDisponibleDto
+        {
+            public int IdUsuario { get; set; }
+            public string Nombre { get; set; } = string.Empty;
+        }
+
         public MisPublicacionesPage()
         {
             InitializeComponent();
@@ -31,23 +43,15 @@ namespace MarketplaceUAT.App.Pages
                     return;
                 }
 
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
+                var client = Api.Client;
 
                 string url =
                     $"{ApiConfig.BaseUrl}/api/Productos";
 
                 var response = await client.GetAsync(url);
+
+                if (await ManejarSesionExpiradaAsync(response))
+                    return;
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -90,6 +94,9 @@ namespace MarketplaceUAT.App.Pages
 
                         var imagenesResponse =
                             await client.GetAsync(imagenesUrl);
+
+                        if (await ManejarSesionExpiradaAsync(imagenesResponse))
+                            return;
 
                         if (imagenesResponse.IsSuccessStatusCode)
                         {
@@ -272,28 +279,11 @@ namespace MarketplaceUAT.App.Pages
             try
             {
                 button.IsEnabled = false;
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
-
                 string url =
-                    $"{ApiConfig.BaseUrl}/api/Productos/{producto.IdProducto}";
+    $"{ApiConfig.BaseUrl}/api/Productos/{producto.IdProducto}";
 
-                var response = await client.DeleteAsync(url);
+                using var response = await Api.EnviarAutenticadoAsync(
+                    () => new HttpRequestMessage(HttpMethod.Delete, url));
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -326,6 +316,200 @@ namespace MarketplaceUAT.App.Pages
             {
                 button.IsEnabled = true;
             }
+        }
+
+        private async void OnRegistrarVentaClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (sender is not Button button ||
+                button.BindingContext is not Producto producto)
+            {
+                return;
+            }
+
+            if (!SesionUsuario.EstaLogueado ||
+                string.IsNullOrWhiteSpace(SesionUsuario.Token) ||
+                SesionUsuario.UsuarioActual == null)
+            {
+                await DisplayAlertAsync(
+                    "Sesión requerida",
+                    "Inicia sesión para registrar una venta.",
+                    "OK");
+                return;
+            }
+
+            if (producto.IdUsuario != SesionUsuario.UsuarioActual.IdUsuario)
+            {
+                await DisplayAlertAsync(
+                    "Acceso denegado",
+                    "Solo el propietario puede registrar la venta.",
+                    "OK");
+                return;
+            }
+
+            if (!producto.Activo || producto.Estado == "Vendido")
+            {
+                await DisplayAlertAsync(
+                    "Producto no disponible",
+                    "Esta publicación ya no está disponible.",
+                    "OK");
+
+                await CargarMisPublicaciones();
+                return;
+            }
+
+            button.IsEnabled = false;
+
+            try
+            {
+
+                string compradoresUrl =
+    $"{ApiConfig.BaseUrl.TrimEnd('/')}/api/Transacciones/Compradores/{producto.IdProducto}";
+
+                using var respuestaCompradores =
+                    await Api.EnviarAutenticadoAsync(
+                        () => new HttpRequestMessage(HttpMethod.Get, compradoresUrl));
+
+                if (!respuestaCompradores.IsSuccessStatusCode)
+                {
+                    string detalle =
+                        await respuestaCompradores.Content.ReadAsStringAsync();
+
+                    await DisplayAlertAsync(
+                        "Error",
+                        $"No se pudieron consultar los compradores.\n" +
+                        $"HTTP {(int)respuestaCompradores.StatusCode}\n{detalle}",
+                        "OK");
+
+                    return;
+                }
+
+                var compradores =
+                    await respuestaCompradores.Content
+                        .ReadFromJsonAsync<List<CompradorDisponibleDto>>(
+                            new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+
+                if (compradores == null || compradores.Count == 0)
+                {
+                    await DisplayAlertAsync(
+                        "Sin compradores",
+                        "Todavía no hay usuarios con conversaciones sobre esta publicación.",
+                        "OK");
+                    return;
+                }
+
+                var opciones = compradores
+                    .Select(c => $"{c.Nombre} (ID: {c.IdUsuario})")
+                    .ToArray();
+
+                string seleccion = await DisplayActionSheetAsync(
+                    "¿Quién compró el producto?",
+                    "Cancelar",
+                    null,
+                    opciones);
+
+                if (string.IsNullOrWhiteSpace(seleccion) ||
+                    seleccion == "Cancelar")
+                {
+                    return;
+                }
+
+                int indice = Array.IndexOf(opciones, seleccion);
+
+                if (indice < 0)
+                    return;
+
+                var comprador = compradores[indice];
+
+                bool confirmar = await DisplayAlertAsync(
+                    "Confirmar venta",
+                    $"¿Confirmas que vendiste \"{producto.Nombre}\" " +
+                    $"a {comprador.Nombre} por ${producto.Precio:N2}?",
+                    "Sí, registrar",
+                    "Cancelar");
+
+                if (!confirmar)
+                    return;
+
+                var datosVenta = new
+                {
+                    IdProducto = producto.IdProducto,
+                    IdUsuarioComprador = comprador.IdUsuario
+                };
+
+                string ventaUrl =
+    $"{ApiConfig.BaseUrl.TrimEnd('/')}/api/Transacciones";
+
+                using var respuestaVenta = await Api.EnviarAutenticadoAsync(
+                    () => new HttpRequestMessage(HttpMethod.Post, ventaUrl)
+                    {
+                        Content = JsonContent.Create(datosVenta)
+                    });
+
+                if (!respuestaVenta.IsSuccessStatusCode)
+                {
+                    string detalle =
+                        await respuestaVenta.Content.ReadAsStringAsync();
+
+                    await DisplayAlertAsync(
+                        "No se pudo registrar",
+                        $"La API rechazó la venta.\n" +
+                        $"HTTP {(int)respuestaVenta.StatusCode}\n{detalle}",
+                        "OK");
+
+                    return;
+                }
+
+                await DisplayAlertAsync(
+                    "Venta registrada",
+                    "La venta se registró correctamente. La publicación dejará de estar disponible y aparecerá en tu historial de ventas.",
+                    "OK");
+
+                await CargarMisPublicaciones();
+            }
+            catch (TaskCanceledException)
+            {
+                await DisplayAlertAsync(
+                    "Tiempo de espera agotado",
+                    "La solicitud tardó demasiado. Comprueba que la API esté ejecutándose.",
+                    "OK");
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlertAsync(
+                    "Error",
+                    $"No se pudo registrar la venta.\n{ex.Message}",
+                    "OK");
+            }
+            finally
+            {
+                button.IsEnabled = true;
+            }
+        }
+
+        private async Task<bool> ManejarSesionExpiradaAsync(
+    HttpResponseMessage response)
+        {
+            if (response.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+                return false;
+
+            await SesionUsuario.CerrarSesionAsync();
+
+            await DisplayAlertAsync(
+                "Sesión expirada",
+                "Tu sesión ya no es válida. Inicia sesión nuevamente.",
+                "OK");
+
+            if (Shell.Current != null)
+            {
+                await Shell.Current.GoToAsync(nameof(LoginPage));
+            }
+
+            return true;
         }
     }
 }

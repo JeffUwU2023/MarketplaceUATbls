@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="MarketplaceUAT.App.Pages.MisComprasPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Mis compras"
+    BackgroundColor="{AppThemeBinding Light=#F5F6FA, Dark=#181818}">
+
+    <Grid Padding="20"
+          RowDefinitions="Auto,*"
+          RowSpacing="16">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="6">
+            <Label
+                Text="Mis compras"
+                FontSize="26"
+                FontAttributes="Bold"
+                TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+            <Label
+                Text="Consulta el historial de productos que has comprado."
+                FontSize="14"
+                TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+
+            <Border
+    x:Name="NotificacionesBorder"
+    IsVisible="False"
+    Padding="12"
+    Stroke="#2457C5"
+    StrokeShape="RoundRectangle 12"
+    BackgroundColor="{AppThemeBinding Light=#EAF0FF, Dark=#26334F}">
+
+                <VerticalStackLayout Spacing="4">
+                    <Label
+            x:Name="NotificacionesTituloLabel"
+            Text="Notificaciones pendientes"
+            FontSize="15"
+            FontAttributes="Bold"
+            TextColor="{AppThemeBinding Light=#2457C5, Dark=#B9CCFF}" />
+
+                    <Label
+            x:Name="NotificacionesMensajeLabel"
+            FontSize="13"
+            TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+
+        <Grid Grid.Row="1">
+
+            <CollectionView
+                x:Name="ComprasCollection"
+                IsVisible="False"
+                SelectionMode="None">
+
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout
+                        Padding="24"
+                        Spacing="10"
+                        VerticalOptions="Center"
+                        HorizontalOptions="Center">
+
+                        <Label
+                            Text="🛍️"
+                            FontSize="48"
+                            HorizontalOptions="Center" />
+
+                        <Label
+                            Text="Todavía no tienes compras"
+                            FontSize="18"
+                            FontAttributes="Bold"
+                            HorizontalTextAlignment="Center"
+                            TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+                        <Label
+                            Text="Cuando compres un producto, aparecerá aquí."
+                            FontSize="14"
+                            HorizontalTextAlignment="Center"
+                            TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border
+                            Padding="16"
+                            Margin="0,0,0,12"
+                            Stroke="{AppThemeBinding Light=#DDDDDD, Dark=#444444}"
+                            StrokeShape="RoundRectangle 16"
+                            BackgroundColor="{AppThemeBinding Light=White, Dark=#252525}">
+
+                            <VerticalStackLayout Spacing="8">
+
+                                <Label
+                                    Text="{Binding NombreProducto}"
+                                    FontSize="17"
+                                    FontAttributes="Bold"
+                                    TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+                                <Label
+                                    Text="{Binding NombreVendedor, StringFormat='Vendedor: {0}'}"
+                                    FontSize="14"
+                                    TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+
+                                <Label
+                                    Text="{Binding PrecioVenta, StringFormat='Precio: ${0:F2}'}"
+                                    FontSize="16"
+                                    FontAttributes="Bold"
+                                    TextColor="#2457C5" />
+
+                                <Label
+                                    Text="{Binding FechaTransaccion, StringFormat='Fecha de compra: {0:dd/MM/yyyy HH:mm}'}"
+                                    FontSize="13"
+                                    TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
+
+                                <Label
+                                    Text="{Binding EstadoTransaccion, StringFormat='Estado: {0}'}"
+                                    FontSize="14"
+                                    FontAttributes="Bold"
+                                    TextColor="{AppThemeBinding Light=#202124, Dark=White}" />
+
+
+                                <Button
+                                    Text="Confirmar compra"
+                                    IsVisible="{Binding PuedeConfirmarCompra}"
+                                    Clicked="OnConfirmarCompraClicked"
+                                    BackgroundColor="#2457C5"
+                                    TextColor="White"
+                                    CornerRadius="10" />
+
+                                <Button
+                                    Text="Solicitar cancelación"
+                                    IsVisible="{Binding PuedeSolicitarCancelacion}"
+                                    Clicked="OnSolicitarCancelacionClicked"
+                                    BackgroundColor="#B42318"
+                                    TextColor="White"
+                                    CornerRadius="10" />
+
+                                <Button
+                                    Text="Aceptar cancelación"
+                                    IsVisible="{Binding PuedeAceptarCancelacionCompra}"
+                                    Clicked="OnAceptarCancelacionCompraClicked"
+                                    BackgroundColor="#8B1E3F"
+                                    TextColor="White"
+                                    CornerRadius="10" />
+
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+
+            <ActivityIndicator
+                x:Name="CargandoIndicator"
+                IsRunning="True"
+                IsVisible="True"
+                Color="#2457C5"
+                HorizontalOptions="Center"
+                VerticalOptions="Center" />
+
+            <Label
+                x:Name="ErrorLabel"
+                IsVisible="False"
+                HorizontalOptions="Center"
+                VerticalOptions="Center"
+                HorizontalTextAlignment="Center"
+                TextColor="{AppThemeBinding Light=#B42318, Dark=#FF7777}" />
+
+        </Grid>
+
+    </Grid>
+</ContentPage>

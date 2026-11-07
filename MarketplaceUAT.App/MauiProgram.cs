@@ -1,4 +1,6 @@
 ﻿using CommunityToolkit.Maui;
+using MarketplaceUAT.App.Pages;
+using MarketplaceUAT.App.Services;
 using Microsoft.Extensions.Logging;
 
 namespace MarketplaceUAT.App
@@ -17,8 +19,11 @@ namespace MarketplaceUAT.App
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
+            builder.Services.AddSingleton<ApiClient>();
+            builder.Services.AddTransient<CarritoPage>();
+
 #if DEBUG
-    		builder.Logging.AddDebug();
+            builder.Logging.AddDebug();
 #endif
 
             return builder.Build();

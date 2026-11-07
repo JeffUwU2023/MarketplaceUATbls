@@ -1,11 +1,16 @@
 using MarketplaceUAT.App.Config;
 using MarketplaceUAT.App.Models;
 using System.Text.Json;
+using MarketplaceUAT.App.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MarketplaceUAT.App.Pages;
 
 public partial class ConversacionesPage : ContentPage
 {
+    private ApiClient Api =>
+    Application.Current!.Handler.MauiContext!.Services
+        .GetRequiredService<ApiClient>();
     private List<Conversacion> TodasLasConversaciones = new();
     private string OrdenSeleccionado = "Más recientes";
     private string BuscarPorSeleccionado = "Producto";
@@ -36,33 +41,13 @@ public partial class ConversacionesPage : ContentPage
                     "OK");
 
                 return;
-            }
-
-            int idUsuario =
-                SesionUsuario.UsuarioActual!.IdUsuario;
-
-            using var handler = new SocketsHttpHandler
-            {
-                Proxy = null,
-                UseProxy = false
-            };
-
-            using var client = new HttpClient(handler)
-            {
-                Timeout = TimeSpan.FromSeconds(10)
-            };
-
-            client.DefaultRequestHeaders.ConnectionClose = true;
+            }        
 
             string url =
-                $"{ApiConfig.BaseUrl}/api/Conversaciones/Usuario/{idUsuario}";
+    $"{ApiConfig.BaseUrl}/api/Conversaciones/Usuario";
 
-            client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue(
-            "Bearer",
-            SesionUsuario.Token);
-
-            var response = await client.GetAsync(url);
+            using var response = await Api.EnviarAutenticadoAsync(() =>
+                new HttpRequestMessage(HttpMethod.Get, url));
 
             if (!response.IsSuccessStatusCode)
             {
@@ -109,7 +94,6 @@ public partial class ConversacionesPage : ContentPage
                 "OK");
         }
     }
-
 
     private void OnBuscarConversacionTextChanged(
         object sender,
@@ -191,8 +175,14 @@ public partial class ConversacionesPage : ContentPage
 
         ConversacionesCollectionView.SelectedItem = null;
 
+        var tiempoInicio = System.Diagnostics.Stopwatch.StartNew();
+
         await Shell.Current.GoToAsync(
-            $"{nameof(ChatPage)}?idConversacion={conversacion.IdConversacion}");
+            $"{nameof(ChatPage)}?idConversacion={conversacion.IdConversacion}",
+    animate: false);
+
+        tiempoInicio.Stop();
+
     }
     private async void OnExplorarPublicacionesClicked(
     object sender,

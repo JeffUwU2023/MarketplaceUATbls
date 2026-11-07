@@ -106,12 +106,20 @@ namespace MarketplaceUAT.API.Controllers
                 return NotFound("El usuario no existe o está inactivo.");
             }
 
-            var productoExiste = await _context.Productos
-                .AnyAsync(p => p.IdProducto == dto.IdProducto && p.Activo);
+            var producto = await _context.Productos
+    .FirstOrDefaultAsync(p =>
+        p.IdProducto == dto.IdProducto &&
+        p.Activo &&
+        p.Estado != "Eliminado");
 
-            if (!productoExiste)
+            if (producto == null)
             {
                 return NotFound("El producto no existe o está inactivo.");
+            }
+
+            if (producto.Estado == "Vendido")
+            {
+                return Conflict("No puedes cambiar el favorito a un producto vendido.");
             }
 
             var duplicado = await _context.Favoritos
@@ -125,7 +133,6 @@ namespace MarketplaceUAT.API.Controllers
                 return Conflict("Ese usuario ya tiene ese producto en favoritos.");
             }
 
-            favoritoExistente.IdUsuario = idUsuario;
             favoritoExistente.IdProducto = dto.IdProducto;
 
             await _context.SaveChangesAsync();
@@ -152,12 +159,20 @@ namespace MarketplaceUAT.API.Controllers
                 return NotFound("El usuario no existe o está inactivo.");
             }
 
-            var productoExiste = await _context.Productos
-                .AnyAsync(p => p.IdProducto == dto.IdProducto && p.Activo);
+            var producto = await _context.Productos
+    .FirstOrDefaultAsync(p =>
+        p.IdProducto == dto.IdProducto &&
+        p.Activo &&
+        p.Estado != "Eliminado");
 
-            if (!productoExiste)
+            if (producto == null)
             {
                 return NotFound("El producto no existe o está inactivo.");
+            }
+
+            if (producto.Estado == "Vendido")
+            {
+                return Conflict("No puedes agregar a favoritos un producto vendido.");
             }
 
             var favoritoExiste = await _context.Favoritos
@@ -185,7 +200,8 @@ namespace MarketplaceUAT.API.Controllers
             {
                 IdFavorito = favorito.IdFavorito,
                 IdUsuario = favorito.IdUsuario,
-                IdProducto = favorito.IdProducto
+                IdProducto = favorito.IdProducto,
+                FechaAgregado = favorito.FechaAgregado
             };
 
             return CreatedAtAction(

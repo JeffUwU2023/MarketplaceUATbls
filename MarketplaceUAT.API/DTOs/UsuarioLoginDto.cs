@@ -9,8 +9,8 @@ namespace MarketplaceUAT.API.DTOs
         public string Correo { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "La contraseña es obligatoria.")]
-        [StringLength(20, MinimumLength = 8,
-            ErrorMessage = "La contraseña debe tener entre 8 y 20 caracteres.")]
+        [StringLength(128, MinimumLength = 8,
+                  ErrorMessage = "La contraseña debe tener entre 8 y 128 caracteres.")]
         public string Password { get; set; } = string.Empty;
     }
 }

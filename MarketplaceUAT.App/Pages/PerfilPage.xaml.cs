@@ -1,10 +1,11 @@
 using MarketplaceUAT.App.Config;
 using MarketplaceUAT.App.Models;
 using Microsoft.Maui.Storage;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using MarketplaceUAT.App.Services;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Json;
 using System.Text;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -12,6 +13,9 @@ namespace MarketplaceUAT.App.Pages
 {
     public partial class PerfilPage : ContentPage
     {
+        private ApiClient Api =>
+        Application.Current!.Handler.MauiContext!.Services
+        .GetRequiredService<ApiClient>();
         public PerfilPage()
         {
             InitializeComponent();
@@ -116,43 +120,33 @@ namespace MarketplaceUAT.App.Pages
                     return;
                 }
 
-                using var stream = await foto.OpenReadAsync();
-
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(30)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", token);
-
-                using var contenido = new MultipartFormDataContent();
-
-                using var contenidoImagen = new StreamContent(stream);
-
-                contenidoImagen.Headers.ContentType =
-                    new MediaTypeHeaderValue(
-                        foto.ContentType ?? "application/octet-stream");
-
-                contenido.Add(
-                    contenidoImagen,
-                    "archivo",
-                    foto.FileName);
-
                 string url =
-                    $"{ApiConfig.BaseUrl}/api/Usuarios/{usuario.IdUsuario}/FotoPerfil";
+    $"{ApiConfig.BaseUrl.TrimEnd('/')}/api/Usuarios/{usuario.IdUsuario}/FotoPerfil";
 
                 CambiarFotoButton.IsEnabled = false;
 
-                using var respuesta = await client.PostAsync(url, contenido);
+                using var respuesta = await Api.EnviarAutenticadoAsync(async () =>
+                {
+                    var stream = await foto.OpenReadAsync();
+
+                    var contenido = new MultipartFormDataContent();
+
+                    var contenidoImagen = new StreamContent(stream);
+
+                    contenidoImagen.Headers.ContentType =
+                        new MediaTypeHeaderValue(
+                            foto.ContentType ?? "application/octet-stream");
+
+                    contenido.Add(
+                        contenidoImagen,
+                        "archivo",
+                        foto.FileName);
+
+                    return new HttpRequestMessage(HttpMethod.Post, url)
+                    {
+                        Content = contenido
+                    };
+                });
 
                 if (!respuesta.IsSuccessStatusCode)
                 {
@@ -183,7 +177,7 @@ namespace MarketplaceUAT.App.Pages
 
                 usuario.UrlFotoPerfil = usuarioActualizado.UrlFotoPerfil;
 
-                SesionUsuario.IniciarSesion(usuario, token);
+                await SesionUsuario.IniciarSesionAsync(usuario, token);
 
                 string rutaFoto = usuario.UrlFotoPerfil.TrimStart('/');
 
@@ -258,17 +252,11 @@ namespace MarketplaceUAT.App.Pages
 
             try
             {
-                using var cliente = new HttpClient();
-
-                cliente.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        token);
-
                 string url =
-                    $"{ApiConfig.BaseUrl.TrimEnd('/')}/api/Usuarios/{usuario.IdUsuario}/FotoPerfil";
+    $"{ApiConfig.BaseUrl.TrimEnd('/')}/api/Usuarios/{usuario.IdUsuario}/FotoPerfil";
 
-                var respuesta = await cliente.DeleteAsync(url);
+                using var respuesta = await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Delete, url));
 
                 if (!respuesta.IsSuccessStatusCode)
                 {
@@ -283,7 +271,7 @@ namespace MarketplaceUAT.App.Pages
 
                 usuario.UrlFotoPerfil = null;
 
-                SesionUsuario.IniciarSesion(usuario, token);
+                await SesionUsuario.IniciarSesionAsync(usuario, token);
 
                 FotoPerfilImage.Source = null;
                 FotoPerfilImage.IsVisible = false;
@@ -409,23 +397,29 @@ namespace MarketplaceUAT.App.Pages
         }
 
         private async void OnCambiarPasswordClicked(
-            object sender,
-            EventArgs e)
+    object sender,
+    EventArgs e)
         {
+            string passwordActual =
+                PasswordActualEntry.Text ?? string.Empty;
+
             string password = PasswordEntry.Text ?? string.Empty;
+
             string confirmacion =
                 ConfirmarPasswordEntry.Text ?? string.Empty;
 
-            if (string.IsNullOrWhiteSpace(password))
+            // PASO 2: validar que se haya escrito la contraseña actual.
+            if (string.IsNullOrWhiteSpace(passwordActual))
             {
                 await DisplayAlertAsync(
-                    "Contraseña requerida",
-                    "Escribe la nueva contraseña.",
+                    "Contraseña actual requerida",
+                    "Introduce tu contraseña actual para poder cambiarla.",
                     "OK");
 
                 return;
             }
 
+            // if (string.IsNullOrWhiteSpace(password)) ...
             if (password.Length < 8 || password.Length > 20)
             {
                 await DisplayAlertAsync(
@@ -451,13 +445,18 @@ namespace MarketplaceUAT.App.Pages
                 return;
             }
 
-            await ActualizarUsuarioAsync(correo, password, true);
+            await ActualizarUsuarioAsync(
+    correo,
+    password,
+    true,
+    passwordActual);
         }
 
         private async Task ActualizarUsuarioAsync(
-            string correo,
-            string? password,
-            bool esCambioPassword)
+    string correo,
+    string? password,
+    bool esCambioPassword,
+    string? passwordActual = null)
         {
             var usuario = SesionUsuario.UsuarioActual;
             string? token = SesionUsuario.Token;
@@ -476,41 +475,46 @@ namespace MarketplaceUAT.App.Pages
 
             try
             {
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(15)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", token);
-
                 var datos = new
                 {
                     Nombres = NombresEntry.Text!.Trim(),
                     Apellidos = ApellidosEntry.Text!.Trim(),
                     Correo = correo,
-                    Password = password
+                    Password = password,
+                    PasswordActual = passwordActual
                 };
 
                 string json = JsonSerializer.Serialize(datos);
 
-                using var content = new StringContent(
-                    json,
-                    Encoding.UTF8,
-                    "application/json");
-
                 string url =
-                    $"{ApiConfig.BaseUrl}/api/Usuarios/{usuario.IdUsuario}";
+                    $"{ApiConfig.BaseUrl.TrimEnd('/')}/api/Usuarios/{usuario.IdUsuario}";
 
-                var response = await client.PutAsync(url, content);
+                using var response = await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Put, url)
+                    {
+                        Content = new StringContent(
+                            json,
+                            Encoding.UTF8,
+                            "application/json")
+                    });
+
+                if ((int)response.StatusCode == 401)
+                {
+                    await SesionUsuario.CerrarSesionAsync();
+
+                    await DisplayAlertAsync(
+                        "Sesión expirada",
+                        "Tu sesión ya no es válida. Inicia sesión nuevamente para continuar.",
+                        "OK");
+
+                    if (Shell.Current != null)
+                    {
+                        await Shell.Current.GoToAsync(
+                            nameof(LoginPage));
+                    }
+
+                    return;
+                }
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -529,10 +533,11 @@ namespace MarketplaceUAT.App.Pages
                 usuario.Apellidos = ApellidosEntry.Text!.Trim();
                 usuario.Correo = correo;
 
-                SesionUsuario.IniciarSesion(usuario, token);
+                await SesionUsuario.IniciarSesionAsync(usuario, token);
 
                 if (esCambioPassword)
                 {
+                    PasswordActualEntry.Text = string.Empty;
                     PasswordEntry.Text = string.Empty;
                     ConfirmarPasswordEntry.Text = string.Empty;
 
@@ -563,6 +568,44 @@ namespace MarketplaceUAT.App.Pages
                     ex.Message,
                     "OK");
             }
+        }
+
+        private async void OnMisComprasClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (!SesionUsuario.EstaLogueado ||
+                string.IsNullOrWhiteSpace(SesionUsuario.Token))
+            {
+                await DisplayAlertAsync(
+                    "Sesión requerida",
+                    "Inicia sesión para consultar tus compras.",
+                    "OK");
+
+                return;
+            }
+
+            await Shell.Current.GoToAsync(
+                nameof(MisComprasPage));
+        }
+
+        private async void OnMisVentasClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (!SesionUsuario.EstaLogueado ||
+                string.IsNullOrWhiteSpace(SesionUsuario.Token))
+            {
+                await DisplayAlertAsync(
+                    "Sesión requerida",
+                    "Inicia sesión para consultar tus ventas.",
+                    "OK");
+
+                return;
+            }
+
+            await Shell.Current.GoToAsync(
+                nameof(MisVentasPage));
         }
     }
 }

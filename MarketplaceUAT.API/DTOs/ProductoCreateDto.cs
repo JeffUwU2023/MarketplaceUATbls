@@ -4,15 +4,16 @@ namespace MarketplaceUAT.API.DTOs
 {
     public class ProductoCreateDto
     {
-        [Required(ErrorMessage = "El usuario es obligatorio.")]
-        [Range(1, int.MaxValue,
-            ErrorMessage = "El usuario no es válido.")]
-        public int IdUsuario { get; set; }
-
         [Required(ErrorMessage = "La categoría es obligatoria.")]
         [Range(1, int.MaxValue,
             ErrorMessage = "La categoría no es válida.")]
         public int IdCategoria { get; set; }
+
+        public bool EsProductoUnico { get; set; } = true;
+
+        [Range(1, int.MaxValue,
+            ErrorMessage = "La cantidad disponible debe ser al menos 1.")]
+        public int CantidadDisponible { get; set; } = 1;
 
         [Required(ErrorMessage = "El nombre del producto es obligatorio.")]
         [StringLength(100, MinimumLength = 3,
@@ -32,16 +33,9 @@ namespace MarketplaceUAT.API.DTOs
         [StringLength(30, MinimumLength = 3,
             ErrorMessage = "La condición debe tener entre 3 y 30 caracteres.")]
         [RegularExpression(
-            "^(Nuevo|Usado)$",
-            ErrorMessage = "La condición debe ser Nuevo o Usado.")]
+        "^(?i:Nuevo|Usado)$",
+        ErrorMessage = "La condición debe ser Nuevo o Usado.")]
         public string Condicion { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "El estado es obligatorio.")]
-        [StringLength(20, MinimumLength = 3,
-            ErrorMessage = "El estado debe tener entre 3 y 20 caracteres.")]
-        [RegularExpression(
-    "^(Disponible|Reservado|Vendido)$",
-            ErrorMessage = "El estado debe ser Disponible, Reservado o Vendido.")]
-        public string Estado { get; set; } = "Disponible";
     }
 }

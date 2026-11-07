@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Hosting;
 
 namespace MarketplaceUAT.API.Controllers
 {
@@ -20,10 +21,14 @@ namespace MarketplaceUAT.API.Controllers
         ".jpg", ".jpeg", ".png", ".webp"
             };
         private readonly MarketplaceContext _context;
+        private readonly IWebHostEnvironment _environment;
 
-        public ImagenesProductoController(MarketplaceContext context)
+        public ImagenesProductoController(
+    MarketplaceContext context,
+    IWebHostEnvironment environment)
         {
             _context = context;
+            _environment = environment;
         }
 
         private static bool EsImagenValida(
@@ -87,6 +92,11 @@ namespace MarketplaceUAT.API.Controllers
         [HttpGet("Producto/{idProducto}")]
         public async Task<ActionResult<IEnumerable<ImagenProductoResponseDto>>> GetImagenesPorProducto(int idProducto)
         {
+            if (idProducto <= 0)
+            {
+                return BadRequest("El ID del producto no es válido.");
+            }
+
             var imagenes = await _context.ImagenesProducto
                 .Where(i => i.IdProducto == idProducto && i.Activo)
                 .Select(i => new ImagenProductoResponseDto
@@ -137,14 +147,82 @@ namespace MarketplaceUAT.API.Controllers
                 return Unauthorized();
             }
             var productoExiste = await _context.Productos
-               .AnyAsync(p =>
-              p.IdProducto == dto.IdProducto &&
-              p.IdUsuario == idUsuario &&
-              p.Activo);
+    .AnyAsync(p =>
+        p.IdProducto == dto.IdProducto &&
+        p.IdUsuario == idUsuario &&
+        p.Activo &&
+        p.Estado != "Vendido" &&
+        p.Estado != "Eliminado");
 
             if (!productoExiste)
             {
                 return NotFound("El producto no existe o está inactivo.");
+            }
+
+            // Validar que la imagen pertenezca a la carpeta del producto.
+            string prefijoEsperado =
+                $"Productos/{dto.IdProducto}/";
+
+            if (!dto.UrlImagen.StartsWith(
+                    prefijoEsperado,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(
+                    "La ruta de la imagen no corresponde al producto.");
+            }
+
+            // Comprobar que el archivo exista dentro de la carpeta del producto.
+            string nombreArchivo = dto.UrlImagen[prefijoEsperado.Length..];
+
+            if (string.IsNullOrWhiteSpace(nombreArchivo) ||
+                nombreArchivo.Contains('/') ||
+                nombreArchivo.Contains('\\') ||
+                nombreArchivo is "." or "..")
+            {
+                return BadRequest("El nombre del archivo no es válido.");
+            }
+
+            string rutaArchivo = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "wwwroot",
+                "Images",
+                "Productos",
+                dto.IdProducto.ToString(),
+                nombreArchivo);
+
+            if (!System.IO.File.Exists(rutaArchivo))
+            {
+                return BadRequest(
+                    "La imagen no existe en el servidor. Primero debes subirla.");
+            }
+
+            // Contar las imágenes activas del producto.
+            int cantidadImagenes = await _context.ImagenesProducto
+                .CountAsync(i =>
+                    i.IdProducto == dto.IdProducto &&
+                    i.Activo);
+
+            if (cantidadImagenes >= 5)
+            {
+                return BadRequest(
+                    "Un producto no puede tener más de 5 imágenes.");
+            }
+
+            // Si la nueva imagen será la principal,
+            // quitar esa condición a las demás imágenes del producto.
+            if (dto.EsPrincipal)
+            {
+                var imagenesAnteriores = await _context.ImagenesProducto
+                    .Where(i =>
+                        i.IdProducto == dto.IdProducto &&
+                        i.Activo &&
+                        i.EsPrincipal)
+                    .ToListAsync();
+
+                foreach (var imagenAnterior in imagenesAnteriores)
+                {
+                    imagenAnterior.EsPrincipal = false;
+                }
             }
 
             var imagen = new ImagenProducto
@@ -199,22 +277,88 @@ namespace MarketplaceUAT.API.Controllers
     .FirstOrDefaultAsync(p =>
         p.IdProducto == imagenExistente.IdProducto &&
         p.IdUsuario == idUsuario &&
-        p.Activo);
+        p.Activo &&
+        p.Estado != "Vendido" &&
+        p.Estado != "Eliminado");
 
             if (productoActual == null)
             {
                 return NotFound();
             }
 
+            if (dto.IdProducto != imagenExistente.IdProducto)
+            {
+                return BadRequest(
+                    "No se puede cambiar el producto al que pertenece una imagen.");
+            }
+
             var productoExiste = await _context.Productos
     .AnyAsync(p =>
         p.IdProducto == dto.IdProducto &&
         p.IdUsuario == idUsuario &&
-        p.Activo);
+        p.Activo &&
+        p.Estado != "Vendido" &&
+        p.Estado != "Eliminado");
 
             if (!productoExiste)
             {
                 return NotFound("El producto no existe o está inactivo.");
+            }
+
+            // Validar que la ruta corresponda al producto.
+            string prefijoEsperado =
+                $"Productos/{dto.IdProducto}/";
+
+            if (!dto.UrlImagen.StartsWith(
+                    prefijoEsperado,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(
+                    "La ruta de la imagen no corresponde al producto.");
+            }
+
+            // Validar el nombre del archivo.
+            string nombreArchivo = dto.UrlImagen[prefijoEsperado.Length..];
+
+            if (string.IsNullOrWhiteSpace(nombreArchivo) ||
+                nombreArchivo.Contains('/') ||
+                nombreArchivo.Contains('\\') ||
+                nombreArchivo is "." or "..")
+            {
+                return BadRequest("El nombre del archivo no es válido.");
+            }
+
+            // Comprobar que el archivo exista en el servidor.
+            string rutaArchivo = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "wwwroot",
+                "Images",
+                "Productos",
+                dto.IdProducto.ToString(),
+                nombreArchivo);
+
+            if (!System.IO.File.Exists(rutaArchivo))
+            {
+                return BadRequest(
+                    "La imagen no existe en el servidor.");
+            }
+
+            // Si esta imagen será la principal, quitar esa condición
+            // a las demás imágenes activas del producto.
+            if (dto.EsPrincipal)
+            {
+                var imagenesAnteriores = await _context.ImagenesProducto
+                    .Where(i =>
+                        i.IdProducto == dto.IdProducto &&
+                        i.IdImagen != id &&
+                        i.Activo &&
+                        i.EsPrincipal)
+                    .ToListAsync();
+
+                foreach (var imagenAnterior in imagenesAnteriores)
+                {
+                    imagenAnterior.EsPrincipal = false;
+                }
             }
 
             imagenExistente.IdProducto = dto.IdProducto;
@@ -246,17 +390,43 @@ namespace MarketplaceUAT.API.Controllers
             }
 
             var productoActual = await _context.Productos
-                .FirstOrDefaultAsync(p =>
-                    p.IdProducto == imagen.IdProducto &&
-                    p.IdUsuario == idUsuario &&
-                    p.Activo);
+    .FirstOrDefaultAsync(p =>
+        p.IdProducto == imagen.IdProducto &&
+        p.IdUsuario == idUsuario &&
+        p.Activo &&
+        p.Estado != "Vendido" &&
+        p.Estado != "Eliminado");
 
             if (productoActual == null)
             {
                 return NotFound();
             }
 
+            // Desactivar la imagen seleccionada.
             imagen.Activo = false;
+
+            // Si se eliminó la imagen principal, elegir otra imagen activa.
+            if (imagen.EsPrincipal)
+            {
+                var imagenesActivas = await _context.ImagenesProducto
+                    .Where(i =>
+                        i.IdProducto == imagen.IdProducto &&
+                        i.Activo)
+                    .OrderBy(i => i.IdImagen)
+                    .ToListAsync();
+
+                foreach (var imagenActiva in imagenesActivas)
+                {
+                    imagenActiva.EsPrincipal = false;
+                }
+
+                var nuevaImagenPrincipal = imagenesActivas.FirstOrDefault();
+
+                if (nuevaImagenPrincipal != null)
+                {
+                    nuevaImagenPrincipal.EsPrincipal = true;
+                }
+            }
 
             await _context.SaveChangesAsync();
 
@@ -288,15 +458,29 @@ namespace MarketplaceUAT.API.Controllers
 
             // 3. Comprobar que el producto pertenece al usuario.
             bool productoExiste = await _context.Productos
-                .AnyAsync(p =>
-                    p.IdProducto == idProducto &&
-                    p.IdUsuario == idUsuario &&
-                    p.Activo);
+    .AnyAsync(p =>
+        p.IdProducto == idProducto &&
+        p.IdUsuario == idUsuario &&
+        p.Activo &&
+        p.Estado != "Vendido" &&
+        p.Estado != "Eliminado");
 
             if (!productoExiste)
             {
                 return NotFound(
                     "El producto no existe, está inactivo o no te pertenece.");
+            }
+
+            // Contar las imágenes activas que ya están registradas.
+            int cantidadImagenes = await _context.ImagenesProducto
+                .CountAsync(i =>
+                    i.IdProducto == idProducto &&
+                    i.Activo);
+
+            if (cantidadImagenes >= 5)
+            {
+                return BadRequest(
+                    "Un producto no puede tener más de 5 imágenes.");
             }
 
             // 4. Verificar que se haya recibido un archivo.
@@ -358,11 +542,12 @@ namespace MarketplaceUAT.API.Controllers
 
             // 9. Crear la carpeta específica del producto.
             string carpetaProducto = Path.Combine(
-                Directory.GetCurrentDirectory(),
-                "wwwroot",
-                "Images",
-                "Productos",
-                idProducto.ToString());
+    _environment.WebRootPath ?? Path.Combine(
+        Directory.GetCurrentDirectory(),
+        "wwwroot"),
+    "Images",
+    "Productos",
+    idProducto.ToString());
 
             Directory.CreateDirectory(carpetaProducto);
 

@@ -29,8 +29,10 @@
 
             <Editor
                 x:Name="DescripcionEditor"
-                Placeholder="Descripción"
-                MaxLength="500" />
+                Placeholder="Descripción del producto"
+                MaxLength="500"
+                HeightRequest="150"
+                AutoSize="TextChanges" />
 
             <Label
                 x:Name="DescripcionContadorLabel"
@@ -58,6 +60,37 @@
             <Picker
                 x:Name="CategoriaPicker"
                 Title="Selecciona una categoría" />
+
+            <Label
+    Text="Tipo de producto"
+    FontAttributes="Bold"
+    FontSize="16" />
+
+            <Picker
+    x:Name="TipoProductoPicker"
+    Title="Selecciona el tipo de producto"
+    SelectedIndex="0"
+    SelectedIndexChanged="OnTipoProductoChanged">
+
+                <Picker.Items>
+                    <x:String>Artículo único</x:String>
+                    <x:String>Producto con varias unidades</x:String>
+                </Picker.Items>
+
+            </Picker>
+
+            <Label
+    Text="Cantidad disponible"
+    FontAttributes="Bold"
+    IsVisible="False"
+    x:Name="CantidadDisponibleLabel" />
+
+            <Entry
+    x:Name="CantidadDisponibleEntry"
+    Placeholder="Cantidad disponible"
+    Keyboard="Numeric"
+    Text="1"
+    IsVisible="False" />
 
             <Button
                 Text="📷 Seleccionar imagen"

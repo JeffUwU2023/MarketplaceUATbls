@@ -1,27 +1,80 @@
 ﻿using MarketplaceUAT.App.Config;
 using MarketplaceUAT.App.Models;
+using MarketplaceUAT.App.Services;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace MarketplaceUAT.App.Pages
 {
-    public partial class PublicarProductoPage : ContentPage
+    public partial class PublicarProductoPage : ContentPage, IQueryAttributable
     {
+        private ApiClient Api =>
+        Application.Current!.Handler.MauiContext!.Services
+        .GetRequiredService<ApiClient>();
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNameCaseInsensitive = true
         };
-        private FileResult? ImagenSeleccionada;
-        private List<FileResult> ImagenesSeleccionadas = [];
+
+        private class ImagenPublicacion
+        {
+            public FileResult? ArchivoNuevo { get; set; }
+
+            public string? UrlExistente { get; set; }
+
+            public string NombreArchivo { get; set; } = string.Empty;
+
+            public bool EsPrincipal { get; set; }
+
+            public bool EsNueva => ArchivoNuevo != null;
+        }
+
+        private List<ImagenPublicacion> ImagenesFormulario = [];
+
         private List<Categoria> Categorias = [];
+
+        private int? IdProductoOrigen;
+
+        private bool EsVolverAPublicar => IdProductoOrigen.HasValue;
+
+        private bool _datosOrigenCargados;
+
+        public void ApplyQueryAttributes(IDictionary<string, object> query)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "[VolverPublicar] ApplyQueryAttributes: iniciado");
+
+            if (query.TryGetValue("IdProductoOrigen", out object? valor))
+            {
+                if (valor is int id && id > 0)
+                {
+                    IdProductoOrigen = id;
+                }
+                else if (int.TryParse(valor?.ToString(), out int idConvertido)
+                         && idConvertido > 0)
+                {
+                    IdProductoOrigen = idConvertido;
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[VolverPublicar] ID recibido: {IdProductoOrigen}");
+        }
 
         public PublicarProductoPage()
         {
+            System.Diagnostics.Debug.WriteLine(
+        "[VolverPublicar] Constructor: iniciado");
+
             InitializeComponent();
+
+            System.Diagnostics.Debug.WriteLine(
+        "[VolverPublicar] Constructor: InitializeComponent completado");
 
             NombreEntry.Keyboard = Keyboard.Create(KeyboardFlags.CapitalizeSentence);
             DescripcionEditor.Keyboard = Keyboard.Create(KeyboardFlags.CapitalizeSentence);
             DescripcionEditor.TextChanged += OnDescripcionTextChanged;
+
         }
 
         private void OnDescripcionTextChanged(object? sender, TextChangedEventArgs e)
@@ -32,39 +85,63 @@ namespace MarketplaceUAT.App.Pages
                 $"{caracteres}/500";
         }
 
+        private void OnTipoProductoChanged(object? sender, EventArgs e)
+        {
+            bool esProductoUnico = TipoProductoPicker.SelectedIndex == 0;
+
+            CantidadDisponibleLabel.IsVisible = !esProductoUnico;
+            CantidadDisponibleEntry.IsVisible = !esProductoUnico;
+
+            if (esProductoUnico)
+            {
+                CantidadDisponibleEntry.Text = "1";
+            }
+            else if (string.IsNullOrWhiteSpace(CantidadDisponibleEntry.Text) ||
+                     CantidadDisponibleEntry.Text == "1")
+            {
+                CantidadDisponibleEntry.Text = string.Empty;
+            }
+        }
+
         private async void OnSeleccionarImagenClicked(object sender, EventArgs e)
         {
             try
             {
-                var fotos = await MediaPicker.Default.PickPhotosAsync(
-                new MediaPickerOptions
-                {
-                    SelectionLimit = 5
-                });
+                int disponibles = 5 - ImagenesFormulario.Count;
 
-                if (fotos == null || fotos.Count == 0)
-                {
-                    return;
-                }
-
-                if (fotos.Count > 5)
+                if (disponibles <= 0)
                 {
                     await DisplayAlertAsync(
                         "Límite de imágenes",
-                        "Puedes seleccionar un máximo de 5 imágenes por producto.",
+                        "Puedes tener un máximo de 5 imágenes por producto. Elimina alguna antes de agregar otra.",
                         "OK");
 
                     return;
                 }
 
-                ImagenesSeleccionadas = fotos.ToList();
+                var fotos = await MediaPicker.Default.PickPhotosAsync(
+                    new MediaPickerOptions
+                    {
+                        SelectionLimit = disponibles
+                    });
 
-                ImagenSeleccionada = ImagenesSeleccionadas.First();
+                if (fotos == null || fotos.Count == 0)
+                    return;
 
-                ImagenPreview.Source =
-                    ImageSource.FromFile(ImagenSeleccionada.FullPath);
+                foreach (var foto in fotos.Take(disponibles))
+                {
+                    ImagenesFormulario.Add(new ImagenPublicacion
+                    {
+                        ArchivoNuevo = foto,
+                        NombreArchivo = foto.FileName,
+                        EsPrincipal = ImagenesFormulario.Count == 0
+                    });
+                }
 
-                ImagenPreview.IsVisible = true;
+                if (!ImagenesFormulario.Any(i => i.EsPrincipal))
+                {
+                    ImagenesFormulario[0].EsPrincipal = true;
+                }
 
                 ActualizarMiniaturas();
             }
@@ -72,7 +149,7 @@ namespace MarketplaceUAT.App.Pages
             {
                 await DisplayAlertAsync(
                     "Error",
-                    $"No se pudo seleccionar las imágenes.\n\n{ex.Message}",
+                    $"No se pudieron seleccionar las imágenes.\n\n{ex.Message}",
                     "OK");
             }
         }
@@ -81,11 +158,25 @@ namespace MarketplaceUAT.App.Pages
         {
             MiniaturasLayout.Children.Clear();
 
-            foreach (FileResult imagen in ImagenesSeleccionadas)
+            ImagenPublicacion? principal =
+                ImagenesFormulario.FirstOrDefault(i => i.EsPrincipal);
+
+            if (principal != null)
+            {
+                ImagenPreview.Source = ObtenerFuenteImagen(principal);
+                ImagenPreview.IsVisible = true;
+            }
+            else
+            {
+                ImagenPreview.Source = null;
+                ImagenPreview.IsVisible = false;
+            }
+
+            foreach (ImagenPublicacion imagen in ImagenesFormulario)
             {
                 var miniatura = new Image
                 {
-                    Source = ImageSource.FromFile(imagen.FullPath),
+                    Source = ObtenerFuenteImagen(imagen),
                     WidthRequest = 60,
                     HeightRequest = 60,
                     Aspect = Aspect.AspectFill
@@ -95,10 +186,8 @@ namespace MarketplaceUAT.App.Pages
 
                 tapGesture.Tapped += (s, e) =>
                 {
-                    ImagenSeleccionada = imagen;
-
-                    ImagenPreview.Source =
-                        ImageSource.FromFile(imagen.FullPath);
+                    foreach (var item in ImagenesFormulario)
+                        item.EsPrincipal = item == imagen;
 
                     ActualizarMiniaturas();
                 };
@@ -107,36 +196,26 @@ namespace MarketplaceUAT.App.Pages
 
                 var eliminarButton = new Button
                 {
-                    Text = "x",
+                    Text = "×",
                     FontSize = 14,
                     WidthRequest = 30,
                     HeightRequest = 30,
                     Padding = 0,
                     BackgroundColor = Colors.Black,
                     TextColor = Colors.White,
-                    CornerRadius = 15
+                    CornerRadius = 15,
+                    HorizontalOptions = LayoutOptions.End,
+                    VerticalOptions = LayoutOptions.Start
                 };
 
                 eliminarButton.Clicked += (s, e) =>
                 {
-                    ImagenesSeleccionadas.Remove(imagen);
+                    bool eraPrincipal = imagen.EsPrincipal;
 
-                    if (ImagenesSeleccionadas.Count == 0)
-                    {
-                        ImagenPreview.IsVisible = false;
-                        MiniaturasLayout.IsVisible = false;
-                        ImagenSeleccionada = null;
-                        return;
-                    }
+                    ImagenesFormulario.Remove(imagen);
 
-                    if (ImagenSeleccionada == imagen)
-                    {
-                        ImagenSeleccionada = ImagenesSeleccionadas.First();
-
-                        ImagenPreview.Source =
-                            ImageSource.FromFile(
-                                ImagenSeleccionada.FullPath);
-                    }
+                    if (eraPrincipal && ImagenesFormulario.Count > 0)
+                        ImagenesFormulario[0].EsPrincipal = true;
 
                     ActualizarMiniaturas();
                 };
@@ -155,48 +234,86 @@ namespace MarketplaceUAT.App.Pages
                     HorizontalOptions = LayoutOptions.Start,
                     VerticalOptions = LayoutOptions.Start,
                     Padding = new Thickness(3, 0),
-                    Margin = new Thickness(0),
-                    IsVisible = ImagenSeleccionada == imagen
+                    IsVisible = imagen.EsPrincipal
                 };
 
                 contenedor.Children.Add(miniatura);
                 contenedor.Children.Add(etiquetaPrincipal);
-
-                eliminarButton.HorizontalOptions = LayoutOptions.End;
-                eliminarButton.VerticalOptions = LayoutOptions.Start;
-
                 contenedor.Children.Add(eliminarButton);
 
                 MiniaturasLayout.Children.Add(contenedor);
             }
 
-            MiniaturasLayout.IsVisible =
-                ImagenesSeleccionadas.Count > 0;
+            MiniaturasLayout.IsVisible = ImagenesFormulario.Count > 0;
+        }
+
+        private ImageSource ObtenerFuenteImagen(ImagenPublicacion imagen)
+        {
+            if (imagen.ArchivoNuevo != null)
+            {
+                return ImageSource.FromFile(imagen.ArchivoNuevo.FullPath);
+            }
+
+            if (!string.IsNullOrWhiteSpace(imagen.UrlExistente))
+            {
+                return ImageSource.FromUri(
+                    new Uri($"{ApiConfig.BaseUrl}/Images/{imagen.UrlExistente}"));
+            }
+
+            return ImageSource.FromFile("placeholder.png");
         }
 
         protected override async void OnAppearing()
         {
+            System.Diagnostics.Debug.WriteLine(
+                "[VolverPublicar] OnAppearing: antes de base");
+
             base.OnAppearing();
 
-            await CargarCategorias();
+            System.Diagnostics.Debug.WriteLine(
+                "[VolverPublicar] OnAppearing: después de base");
+
+            try
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[VolverPublicar] Antes de CargarCategorias");
+
+                await CargarCategorias();
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] Categorías cargadas: {Categorias.Count}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] IdProductoOrigen: {IdProductoOrigen}");
+
+                if (EsVolverAPublicar && !_datosOrigenCargados)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        "[VolverPublicar] Antes de CargarProductoOrigen");
+
+                    await CargarProductoOrigen();
+
+                    System.Diagnostics.Debug.WriteLine(
+                        "[VolverPublicar] Después de CargarProductoOrigen");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] ERROR EN OnAppearing: {ex}");
+
+                await DisplayAlertAsync(
+                    "Error al abrir el formulario",
+                    ex.Message,
+                    "OK");
+            }
         }
 
         private async Task CargarCategorias()
         {
             try
             {
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
+                var client = Api.Client;
 
                 string url =
                     $"{ApiConfig.BaseUrl}/api/Categorias";
@@ -242,371 +359,556 @@ namespace MarketplaceUAT.App.Pages
             }
         }
 
-        private async void OnPublicarClicked(object sender, EventArgs e)
+        private async Task CargarProductoOrigen()
         {
+            if (!IdProductoOrigen.HasValue)
+                return;
+
+            System.Diagnostics.Debug.WriteLine(
+                "[VolverPublicar] Inicio de CargarProductoOrigen");
+
             try
             {
-                PublicarButton.IsEnabled = false;
-                if (!SesionUsuario.EstaLogueado)
+                var client = Api.Client;
+
+                string urlProducto =
+                    $"{ApiConfig.BaseUrl}/api/Productos/{IdProductoOrigen.Value}";
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] Solicitando producto: {urlProducto}");
+
+                var response = await client.GetAsync(urlProducto);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] Respuesta del producto: {(int)response.StatusCode}");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    string error = await response.Content.ReadAsStringAsync();
+
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[VolverPublicar] Error del producto: {error}");
+
+                    await DisplayAlertAsync(
+                        "Error",
+                        $"No se pudo cargar la publicación original. " +
+                        $"Código HTTP: {(int)response.StatusCode}",
+                        "OK");
+
+                    return;
+                }
+
+                string json = await response.Content.ReadAsStringAsync();
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[VolverPublicar] JSON del producto recibido");
+
+                var producto = JsonSerializer.Deserialize<Producto>(
+                    json,
+                    JsonOptions);
+
+                if (producto == null)
+                {
+                    await DisplayAlertAsync(
+                        "Error",
+                        "No se pudo interpretar la información del producto.",
+                        "OK");
+
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] Producto deserializado. ID: {producto.IdProducto}");
+
+                if (producto.IdUsuario != SesionUsuario.UsuarioActual?.IdUsuario ||
+                    producto.Estado != "Vendido" ||
+                    !producto.Activo)
+                {
+                    await DisplayAlertAsync(
+                        "Acción no permitida",
+                        "Solo puedes volver a publicar tus propios productos vendidos.",
+                        "OK");
+
+                    return;
+                }
+
+                NombreEntry.Text = producto.Nombre;
+                DescripcionEditor.Text = producto.Descripcion;
+
+                PrecioEntry.Text = producto.Precio.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+
+                int indiceCondicion = CondicionPicker.Items.IndexOf(
+                    producto.Condicion);
+
+                CondicionPicker.SelectedIndex = indiceCondicion;
+
+                int indiceCategoria = Categorias.FindIndex(
+                    c => c.IdCategoria == producto.IdCategoria);
+
+                CategoriaPicker.SelectedIndex = indiceCategoria;
+
+                DescripcionContadorLabel.Text =
+                    $"{DescripcionEditor.Text?.Length ?? 0}/500";
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[VolverPublicar] Campos del formulario completados");
+
+                string urlImagenes =
+                    $"{ApiConfig.BaseUrl}/api/ImagenesProducto/Producto/{producto.IdProducto}";
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] Solicitando imágenes: {urlImagenes}");
+
+                var imagenesResponse = await client.GetAsync(urlImagenes);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] Respuesta de imágenes: {(int)imagenesResponse.StatusCode}");
+
+                if (imagenesResponse.IsSuccessStatusCode)
+                {
+                    string imagenesJson =
+                        await imagenesResponse.Content.ReadAsStringAsync();
+
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[VolverPublicar] JSON de imágenes recibido. Caracteres: {imagenesJson.Length}");
+
+                    var imagenes =
+                        JsonSerializer.Deserialize<List<ImagenProducto>>(
+                            imagenesJson,
+                            JsonOptions);
+
+                    if (imagenes != null)
+                    {
+                        ImagenesFormulario.Clear();
+
+                        foreach (var imagen in imagenes
+                            .Where(i => i.Activo)
+                            .Take(5))
+                        {
+                            ImagenesFormulario.Add(new ImagenPublicacion
+                            {
+                                UrlExistente = imagen.UrlImagen,
+                                NombreArchivo = Path.GetFileName(imagen.UrlImagen),
+                                EsPrincipal = imagen.EsPrincipal
+                            });
+                        }
+
+                        if (ImagenesFormulario.Count > 0 &&
+                            !ImagenesFormulario.Any(i => i.EsPrincipal))
+                        {
+                            ImagenesFormulario[0].EsPrincipal = true;
+                        }
+
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[VolverPublicar] Imágenes cargadas: {ImagenesFormulario.Count}");
+
+                        System.Diagnostics.Debug.WriteLine(
+                            "[VolverPublicar] Actualizando miniaturas");
+
+                        ActualizarMiniaturas();
+
+                        System.Diagnostics.Debug.WriteLine(
+                            "[VolverPublicar] Miniaturas actualizadas");
+                    }
+                }
+                else
+                {
+                    string errorImagenes =
+                        await imagenesResponse.Content.ReadAsStringAsync();
+
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[VolverPublicar] Error al consultar imágenes: {errorImagenes}");
+                }
+
+                _datosOrigenCargados = true;
+
+                Title = "Volver a publicar";
+                PublicarButton.Text = "Volver a publicar";
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[VolverPublicar] Carga finalizada correctamente");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[VolverPublicar] EXCEPCIÓN: {ex}");
+
+                await DisplayAlertAsync(
+                    "Error de conexión",
+                    $"No se pudo cargar la publicación original.\n{ex.Message}",
+                    "OK");
+            }
+        }
+
+        private async void OnPublicarClicked(object sender, EventArgs e)
+        {
+            if (!PublicarButton.IsEnabled)
+                return;
+
+            PublicarButton.IsEnabled = false;
+
+            try
+            {
+                if (!SesionUsuario.EstaLogueado ||
+                    SesionUsuario.UsuarioActual == null ||
+                    string.IsNullOrWhiteSpace(SesionUsuario.Token))
                 {
                     await DisplayAlertAsync(
                         "Iniciar sesión",
                         "Debes iniciar sesión para publicar un producto.",
                         "OK");
-
                     return;
                 }
 
-                string nombre =
-                    NombreEntry.Text?.Trim() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(nombre))
+                string nombre = NombreEntry.Text?.Trim() ?? string.Empty;
+                string descripcion = DescripcionEditor.Text?.Trim() ?? string.Empty;
+                string precioTexto = PrecioEntry.Text?.Trim() ?? string.Empty;
+
+                if (nombre.Length < 3 || nombre.Length > 100)
                 {
                     await DisplayAlertAsync(
-                        "Nombre obligatorio",
-                        "El nombre del producto es obligatorio.",
+                        "Nombre inválido",
+                        "El nombre debe tener entre 3 y 100 caracteres.",
                         "OK");
-
-                    return;
-                }
-
-                if (nombre.Length > 100)
-                {
-                    await DisplayAlertAsync(
-                        "Nombre demasiado largo",
-                        "El nombre del producto no puede superar los 100 caracteres.",
-                        "OK");
-
-                    return;
-                }
-
-                if (nombre.Length < 10)
-                {
-                    await DisplayAlertAsync(
-                        "Nombre demasiado corto",
-                        "El nombre del producto debe tener al menos 10 caracteres.",
-                        "OK");
-
-                    return;
-                }
-
-                string descripcion =
-    DescripcionEditor.Text?.Trim() ?? string.Empty;
-
-                if (string.IsNullOrWhiteSpace(descripcion))
-                {
-                    await DisplayAlertAsync(
-                        "Descripción obligatoria",
-                        "La descripción del producto es obligatoria.",
-                        "OK");
-
                     return;
                 }
 
                 if (descripcion.Length > 500)
                 {
                     await DisplayAlertAsync(
-                        "Descripción demasiado larga",
+                        "Descripción inválida",
                         "La descripción no puede superar los 500 caracteres.",
                         "OK");
-
                     return;
                 }
 
-                if (descripcion.Length < 25)
-                {
-                    await DisplayAlertAsync(
-                        "Descripción demasiado corta",
-                        "La descripción debe tener al menos 25 caracteres.",
-                        "OK");
-
-                    return;
-                }
-
-                string precioTexto =
-                    PrecioEntry.Text?.Trim() ?? string.Empty;
-
-                if (string.IsNullOrWhiteSpace(nombre) ||
-                    string.IsNullOrWhiteSpace(descripcion) ||
-                    string.IsNullOrWhiteSpace(precioTexto) ||
-                    CondicionPicker.SelectedIndex == -1 ||
-                    CategoriaPicker.SelectedIndex == -1)
+                if (CondicionPicker.SelectedIndex < 0 ||
+                    CategoriaPicker.SelectedIndex < 0 ||
+                    string.IsNullOrWhiteSpace(precioTexto))
                 {
                     await DisplayAlertAsync(
                         "Datos incompletos",
                         "Completa todos los campos para publicar el producto.",
                         "OK");
-
                     return;
                 }
 
                 if (!decimal.TryParse(
-                precioTexto.Replace(',', '.'),
-                System.Globalization.NumberStyles.Number,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out decimal precio))
+                    precioTexto.Replace(',', '.'),
+                    System.Globalization.NumberStyles.Number,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out decimal precio) || precio <= 0)
                 {
                     await DisplayAlertAsync(
                         "Precio inválido",
-                        "Escribe un precio válido. Ejemplo: 350 o 350.50",
+                        "Escribe un precio válido mayor que cero. Ejemplo: 350 o 350.50.",
                         "OK");
-
                     return;
                 }
 
-                if (precio <= 0)
+                bool esProductoUnico = TipoProductoPicker.SelectedIndex == 0;
+
+                int cantidadDisponible = 1;
+
+                if (!esProductoUnico)
+                {
+                    if (!int.TryParse(
+                        CantidadDisponibleEntry.Text,
+                        out cantidadDisponible) ||
+                        cantidadDisponible < 1)
+                    {
+                        await DisplayAlertAsync(
+                            "Cantidad inválida",
+                            "Ingresa una cantidad de al menos una unidad.",
+                            "OK");
+                        return;
+                    }
+                }
+
+                if (ImagenesFormulario.Count > 5)
                 {
                     await DisplayAlertAsync(
-                        "Precio inválido",
-                        "El precio debe ser mayor que $0.",
+                        "Límite de imágenes",
+                        "Puedes publicar un máximo de 5 imágenes.",
                         "OK");
-
                     return;
+                }
+
+                if (ImagenesFormulario.Count > 0 &&
+                    !ImagenesFormulario.Any(i => i.EsPrincipal))
+                {
+                    ImagenesFormulario[0].EsPrincipal = true;
                 }
 
                 Categoria categoriaSeleccionada =
-                Categorias[CategoriaPicker.SelectedIndex];
+                    Categorias[CategoriaPicker.SelectedIndex];
 
-                if (ImagenSeleccionada != null)
-                {
-                    using var imagenStream =
-                        await ImagenSeleccionada.OpenReadAsync();
-
-                    const long limiteImagen = 20 * 1024 * 1024;
-
-                    if (imagenStream.Length > limiteImagen)
-                    {
-                        await DisplayAlertAsync(
-                            "Imagen demasiado grande",
-                            "La imagen no puede superar los 20 MB.",
-                            "OK");
-
-                        return;
-                    }
-                }
+                var client = Api.Client;
 
                 var producto = new
                 {
-                    IdUsuario = SesionUsuario.UsuarioActual!.IdUsuario,
                     IdCategoria = categoriaSeleccionada.IdCategoria,
+                    EsProductoUnico = esProductoUnico,
+                    CantidadDisponible = cantidadDisponible,
                     Nombre = nombre,
                     Descripcion = descripcion,
                     Precio = precio,
-                    Condicion = CondicionPicker.SelectedItem?.ToString() ?? string.Empty,
-                    Estado = "Disponible"
+                    Condicion = CondicionPicker.SelectedItem?.ToString() ?? string.Empty
                 };
 
-                using var handler = new SocketsHttpHandler
+                string urlProducto = $"{ApiConfig.BaseUrl}/api/Productos";
+
+                string json = JsonSerializer.Serialize(producto);
+
+                using var response = await Api.EnviarAutenticadoAsync(
+    () => new HttpRequestMessage(HttpMethod.Post, urlProducto)
+    {
+        Content = new StringContent(
+            json,
+            System.Text.Encoding.UTF8,
+            "application/json")
+    });
+
+                if (!response.IsSuccessStatusCode)
                 {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
-
-                string url =
-                    $"{ApiConfig.BaseUrl}/api/Productos";
-
-                string json =
-                    JsonSerializer.Serialize(producto);
-
-                using var content = new StringContent(
-                    json,
-                    System.Text.Encoding.UTF8,
-                    "application/json");
-
-                var response =
-                await client.PostAsync(url, content);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    string respuestaJson =
-                        await response.Content.ReadAsStringAsync();
-
-                    var productoCreado =
-                        JsonSerializer.Deserialize<Producto>(
-                        respuestaJson,
-                        JsonOptions);
-
-                    if (productoCreado == null)
-                    {
-                        await DisplayAlertAsync(
-                            "Error",
-                            "El producto se creó, pero no se pudo obtener su identificador.",
-                            "OK");
-
-                        return;
-                    }
-
-                    int idProducto = productoCreado.IdProducto;
-
-                    if (ImagenesSeleccionadas.Count == 0)
-                    {
-                        await DisplayAlertAsync(
-                            "Producto creado",
-                            $"El producto se creó correctamente.\nID: {idProducto}\n\nNo se seleccionó ninguna imagen.",
-                            "OK");
-
-                        await Shell.Current.GoToAsync("..");
-                        return;
-                    }
-
-                    string subirImagenUrl =
-                        $"{ApiConfig.BaseUrl}/api/ImagenesProducto/Subir?idProducto={idProducto}";
-
-                    string imagenRegistroUrl =
-                        $"{ApiConfig.BaseUrl}/api/ImagenesProducto";
-
-                    List<string> nombresImagenes = [];
-
-                    var imagenesOrdenadas = ImagenesSeleccionadas
-                    .OrderByDescending(imagen => imagen == ImagenSeleccionada)
-                    .ToList();
-
-                    for (int i = 0; i < imagenesOrdenadas.Count; i++)
-                    {
-                        FileResult imagen = imagenesOrdenadas[i];
-
-                        using var imagenContent =
-                            new MultipartFormDataContent();
-
-                        using var archivoStream =
-                            await imagen.OpenReadAsync();
-
-                        using var streamContent =
-                            new StreamContent(archivoStream);
-
-                        string extension = Path.GetExtension(imagen.FileName)
-    .ToLowerInvariant();
-
-                        string tipoMime = extension switch
-                        {
-                            ".jpg" or ".jpeg" => "image/jpeg",
-                            ".png" => "image/png",
-                            ".webp" => "image/webp",
-                            _ => string.Empty
-                        };
-
-                        if (string.IsNullOrEmpty(tipoMime))
-                        {
-                            await DisplayAlertAsync(
-                                "Formato no válido",
-                                $"La imagen {imagen.FileName} no tiene un formato permitido. Usa JPG, JPEG, PNG o WEBP.",
-                                "Aceptar");
-
-                            return;
-                        }
-
-                        streamContent.Headers.ContentType =
-                            new MediaTypeHeaderValue(tipoMime);
-
-                        imagenContent.Add(
-                            streamContent,
-                            "archivo",
-                            imagen.FileName);
-
-                        var imagenResponse =
-                            await client.PostAsync(
-                                subirImagenUrl,
-                                imagenContent);
-
-                        if (!imagenResponse.IsSuccessStatusCode)
-                        {
-                            string mensajeImagen =
-                                await imagenResponse.Content.ReadAsStringAsync();
-
-                            await DisplayAlertAsync(
-                                "Imagen",
-                                $"El producto se creó, pero la imagen {i + 1} no se pudo subir.\n\n{mensajeImagen}",
-                                "OK");
-
-                            return;
-                        }
-
-                        string imagenJson =
-                            await imagenResponse.Content.ReadAsStringAsync();
-
-                        using var imagenDocumento =
-                            JsonDocument.Parse(imagenJson);
-
-                        string nombreImagen =
-                            imagenDocumento.RootElement
-                                .GetProperty("urlImagen")
-                                .GetString() ?? string.Empty;
-
-                        var imagenDto = new
-                        {
-                            IdProducto = idProducto,
-                            UrlImagen = nombreImagen,
-                            EsPrincipal = ImagenSeleccionada == imagen
-                        };
-
-                        string imagenRegistroJson =
-                            JsonSerializer.Serialize(imagenDto);
-
-                        using var imagenRegistroContent =
-                            new StringContent(
-                                imagenRegistroJson,
-                                System.Text.Encoding.UTF8,
-                                "application/json");
-
-                        var registroResponse =
-                            await client.PostAsync(
-                                imagenRegistroUrl,
-                                imagenRegistroContent);
-
-                        if (!registroResponse.IsSuccessStatusCode)
-                        {
-                            string mensajeRegistro =
-                                await registroResponse.Content.ReadAsStringAsync();
-
-                            await DisplayAlertAsync(
-                                "Imagen",
-                                $"La imagen {i + 1} se subió, pero no se pudo relacionar con el producto.\n\n{mensajeRegistro}",
-                                "OK");
-
-                            return;
-                        }
-
-                        nombresImagenes.Add(nombreImagen);
-                    }
+                    string error = await response.Content.ReadAsStringAsync();
 
                     await DisplayAlertAsync(
-                        "Publicación completada",
-                        $"El producto se publicó correctamente.\n\nProducto: {idProducto}\nImágenes: {nombresImagenes.Count}",
+                        "No se pudo publicar",
+                        error,
                         "OK");
-
-                    await Shell.Current.GoToAsync("..");
 
                     return;
                 }
-                    string mensaje =
-                    await response.Content.ReadAsStringAsync();
+
+                string respuestaJson = await response.Content.ReadAsStringAsync();
+
+                var productoCreado = JsonSerializer.Deserialize<Producto>(
+                    respuestaJson,
+                    JsonOptions);
+
+                if (productoCreado == null || productoCreado.IdProducto <= 0)
+                {
+                    await DisplayAlertAsync(
+                        "Error",
+                        "El producto pudo haberse creado, pero no se obtuvo su identificador.",
+                        "OK");
+                    return;
+                }
+
+                int idProductoNuevo = productoCreado.IdProducto;
+                int imagenesRegistradas = 0;
+
+                foreach (var imagen in ImagenesFormulario
+                    .OrderByDescending(i => i.EsPrincipal))
+                {
+                    await SubirYRegistrarImagenAsync(
+                        client,
+                        idProductoNuevo,
+                        imagen);
+
+                    imagenesRegistradas++;
+                }
+
+                string mensaje = EsVolverAPublicar
+                    ? $"Se creó una nueva publicación correctamente.\n\nNuevo ID: " +
+                    $"{idProductoNuevo}\nImágenes: {imagenesRegistradas}\n\nLa publicación vendida original se conservó."
+                    : $"El producto se publicó correctamente.\n\nID: " +
+                    $"{idProductoNuevo}\nImágenes: {imagenesRegistradas}";
 
                 await DisplayAlertAsync(
-                    "No se pudo publicar",
+                    "Publicación completada",
                     mensaje,
                     "OK");
+
+                await Shell.Current.GoToAsync("..");
             }
             catch (Exception ex)
             {
                 await DisplayAlertAsync(
-                    "Error de conexión",
+                    "Error al publicar",
                     ex.Message,
                     "OK");
             }
             finally
             {
                 PublicarButton.IsEnabled = true;
+            }
+        }
+
+        private async Task SubirYRegistrarImagenAsync(
+            HttpClient client,
+            int idProducto,
+            ImagenPublicacion imagen)
+        {
+            Stream archivoStream;
+            string nombreArchivo;
+
+            if (imagen.ArchivoNuevo != null)
+            {
+                archivoStream = await imagen.ArchivoNuevo.OpenReadAsync();
+                nombreArchivo = Path.GetFileName(imagen.ArchivoNuevo.FileName);
+            }
+            else if (!string.IsNullOrWhiteSpace(imagen.UrlExistente))
+            {
+                string urlImagenOriginal =
+                    $"{ApiConfig.BaseUrl}/Images/{imagen.UrlExistente}";
+
+                using var descarga = await client.GetAsync(
+                    urlImagenOriginal,
+                    HttpCompletionOption.ResponseHeadersRead);
+
+                if (!descarga.IsSuccessStatusCode)
+                {
+                    throw new Exception(
+                        $"No se pudo descargar una imagen original. Código HTTP: {(int)descarga.StatusCode}");
+                }
+
+                var memoria = new MemoryStream();
+
+                await using (var streamOriginal =
+                    await descarga.Content.ReadAsStreamAsync())
+                {
+                    await streamOriginal.CopyToAsync(memoria);
+                }
+
+                if (memoria.Length > 20 * 1024 * 1024)
+                {
+                    memoria.Dispose();
+
+                    throw new Exception(
+                        "Una de las imágenes originales supera el límite de 20 MB.");
+                }
+
+                memoria.Position = 0;
+
+                archivoStream = memoria;
+                nombreArchivo = Path.GetFileName(imagen.UrlExistente);
+            }
+            else
+            {
+                throw new Exception("Una imagen no tiene un archivo válido.");
+            }
+
+            using (archivoStream)
+            {
+                if (archivoStream.CanSeek &&
+                    archivoStream.Length > 20 * 1024 * 1024)
+                {
+                    throw new Exception(
+                        $"La imagen {nombreArchivo} supera el límite de 20 MB.");
+                }
+
+                string extension = Path.GetExtension(nombreArchivo)
+                    .ToLowerInvariant();
+
+                string tipoMime = extension switch
+                {
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".png" => "image/png",
+                    ".webp" => "image/webp",
+                    _ => string.Empty
+                };
+
+                if (string.IsNullOrEmpty(tipoMime))
+                {
+                    throw new Exception(
+                        $"La imagen {nombreArchivo} no tiene un formato permitido. Usa JPG, JPEG, PNG o WEBP.");
+                }
+
+                string urlSubir =
+                    $"{ApiConfig.BaseUrl}/api/ImagenesProducto/Subir?idProducto={idProducto}";
+
+                using var respuestaSubida = await Api.EnviarAutenticadoAsync(
+    async () =>
+    {
+        Stream nuevoStream;
+
+        if (imagen.ArchivoNuevo != null)
+        {
+            nuevoStream = await imagen.ArchivoNuevo.OpenReadAsync();
+        }
+        else
+        {
+            nuevoStream = new MemoryStream();
+
+            if (archivoStream.CanSeek)
+                archivoStream.Position = 0;
+
+            await archivoStream.CopyToAsync(nuevoStream);
+            nuevoStream.Position = 0;
+        }
+
+        var multipart = new MultipartFormDataContent();
+
+        var contenidoArchivo = new StreamContent(nuevoStream);
+
+        contenidoArchivo.Headers.ContentType =
+            new MediaTypeHeaderValue(tipoMime);
+
+        multipart.Add(
+            contenidoArchivo,
+            "archivo",
+            nombreArchivo);
+
+        return new HttpRequestMessage(HttpMethod.Post, urlSubir)
+        {
+            Content = multipart
+        };
+    });
+
+                if (!respuestaSubida.IsSuccessStatusCode)
+                {
+                    string error = await respuestaSubida.Content.ReadAsStringAsync();
+
+                    throw new Exception(
+                        $"No se pudo subir la imagen {nombreArchivo}.\n{error}");
+                }
+
+                string jsonImagen =
+                    await respuestaSubida.Content.ReadAsStringAsync();
+
+                using var documento = JsonDocument.Parse(jsonImagen);
+
+                string urlGuardada = documento.RootElement
+                    .GetProperty("urlImagen")
+                    .GetString() ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(urlGuardada))
+                {
+                    throw new Exception(
+                        $"El servidor no devolvió la URL de {nombreArchivo}.");
+                }
+
+                var registro = new
+                {
+                    IdProducto = idProducto,
+                    UrlImagen = urlGuardada,
+                    EsPrincipal = imagen.EsPrincipal
+                };
+
+                string jsonRegistro = JsonSerializer.Serialize(registro);
+
+                string urlRegistro =
+                    $"{ApiConfig.BaseUrl}/api/ImagenesProducto";
+
+                using var respuestaRegistro = await Api.EnviarAutenticadoAsync(
+    () => new HttpRequestMessage(HttpMethod.Post, urlRegistro)
+    {
+        Content = new StringContent(
+            jsonRegistro,
+            System.Text.Encoding.UTF8,
+            "application/json")
+    });
+
+                if (!respuestaRegistro.IsSuccessStatusCode)
+                {
+                    string error = await respuestaRegistro.Content.ReadAsStringAsync();
+
+                    throw new Exception(
+                        $"La imagen {nombreArchivo} se subió, pero no se pudo registrar.\n{error}");
+                }
             }
         }
     }

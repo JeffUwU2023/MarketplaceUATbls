@@ -1,372 +1,467 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" 
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" 
-             x:Class="MarketplaceUAT.App.Pages.MainPage"
-             Title="Marketplace UAT">
-    <ScrollView>
-        <VerticalStackLayout 
-            Padding="20" 
-            Spacing="20">
-            
-            <Label 
-                Text="Marketplace UAT" 
-                FontSize="30" 
-                FontAttributes="Bold" 
-                HorizontalOptions="Center" />
-            <Label 
-                Text="Compra y vende dentro de la comunidad universitaria" 
-                FontSize="16" 
-                HorizontalTextAlignment="Center" />
-            <Label
-                x:Name="UsuarioSesionLabel"
-                FontSize="16"
-                HorizontalOptions="Center"
-                IsVisible="False" />
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:converters="clr-namespace:MarketplaceUAT.App.Converters"
+    x:Class="MarketplaceUAT.App.Pages.MainPage"
+    Title="Inicio"
+    BackgroundColor="{AppThemeBinding Light=#F6F7F9, Dark=#151515}">
 
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:FavoritoCorazonConverter
+            x:Key="FavoritoCorazonConverter" />
+            <converters:CarritoIconoConverter 
+            x:Key="CarritoIconoConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
 
-            <Grid
-                ColumnDefinitions="Auto,*"
-                ColumnSpacing="12"
-                Margin="0,10,0,5">
+    <Grid RowDefinitions="Auto,*">
 
+        <!-- Encabezado -->
+        <VerticalStackLayout
+            Grid.Row="0"
+            Padding="16,12,16,8"
+            Spacing="12">
 
+            <Grid ColumnDefinitions="*,Auto"
+                  ColumnSpacing="10">
 
-                <Border
-            x:Name="PerfilAvatarBorder"
-            Grid.Column="0"
-            WidthRequest="48"
-            HeightRequest="48"
-            StrokeThickness="0"
-            BackgroundColor="#DCE8FF"
-            StrokeShape="RoundRectangle 24"
-            VerticalOptions="Center">
+                <VerticalStackLayout Grid.Column="0"
+                                     Spacing="2"
+                                     VerticalOptions="Center">
+                    <Label Text="Marketplace"
+                           FontSize="25"
+                           FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=#202124, Dark=#FFFFFF}"/>
+
+                    <Label Text="Encuentra algo que te guste"
+                           FontSize="13"
+                           TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}"/>
+                </VerticalStackLayout>
+
+                <Border Grid.Column="1"
+                        x:Name="PerfilAvatarBorder"
+                        WidthRequest="44"
+                        HeightRequest="44"
+                        Stroke="#DADADA"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#292929}"
+                        StrokeShape="RoundRectangle 22"
+                        IsVisible="False"
+                        VerticalOptions="Center">
 
                     <Grid>
-                        <Label
-            x:Name="PerfilPlaceholder"
-            Text="👤"
-            FontSize="24"
-            HorizontalOptions="Center"
-            VerticalOptions="Center" />
+                        <Image x:Name="PerfilFotoImage"
+                               Aspect="AspectFill"
+                               IsVisible="False"/>
 
-                        <Image
-            x:Name="PerfilFotoImage"
-            Aspect="AspectFill"
-            IsVisible="False" />
+                        <Label x:Name="PerfilPlaceholder"
+                               Text="👤"
+                               FontSize="22"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"/>
                     </Grid>
 
                     <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnPerfilAvatarTapped" />
+                        <TapGestureRecognizer Tapped="OnPerfilAvatarTapped"/>
                     </Border.GestureRecognizers>
                 </Border>
-
-
-                <Button
-        x:Name="SesionButton"
-        Grid.Column="1"
-        Text="Iniciar sesión"
-        Clicked="OnSesionButtonClicked"
-        VerticalOptions="Center" />
-
             </Grid>
 
-            <Grid
-    ColumnDefinitions="*,*"
-    RowDefinitions="Auto,Auto"
-    ColumnSpacing="10"
-    RowSpacing="10">
+            <!-- Sesión -->
+            <Grid ColumnDefinitions="*,Auto"
+                  ColumnSpacing="8">
 
-                <Button
-        Grid.Row="0"
-        Grid.Column="0"
-        Text="❤️ Mis favoritos"
-        Clicked="OnAbrirFavoritosClicked" />
+                <Button x:Name="SesionButton"
+                        Grid.Column="0"
+                        Text="Iniciar sesión"
+                        Clicked="OnSesionButtonClicked"
+                        FontSize="13"
+                        Padding="12,8"
+                        CornerRadius="10"
+                        HorizontalOptions="Fill"/>
 
-                <Button
-        Grid.Row="0"
-        Grid.Column="1"
-        Text="➕ Publicar producto"
-        Clicked="OnAbrirPublicarProductoClicked" />
+                <Grid Grid.Column="1"
+      VerticalOptions="Center">
 
-                <Button
-        Grid.Row="1"
-        Grid.Column="0"
-        Text="📦 Mis publicaciones"
-        Clicked="OnAbrirMisPublicacionesClicked" />
+                    <Button x:Name="ConversacionesButton"
+            Text="💬 Chats"
+            Clicked="OnConversacionesClicked"
+            FontSize="13"
+            Padding="10,8"
+            CornerRadius="10"
+            IsVisible="False"/>
 
-                <Button
-        x:Name="ConversacionesButton"
-        Grid.Row="1"
-        Grid.Column="1"
-        Text="💬 Mis conversaciones"
-        FontSize="13"
-        LineBreakMode="WordWrap"
-        Clicked="OnConversacionesClicked" />
+                    <!-- Insignia de mensajes sin leer -->
+                    <Border x:Name="ConversacionesBadge"
+            WidthRequest="22"
+            HeightRequest="22"
+            BackgroundColor="#E53935"
+            Stroke="#FFFFFF"
+            StrokeThickness="1.5"
+            StrokeShape="RoundRectangle 11"
+            HorizontalOptions="End"
+            VerticalOptions="Start"
+            TranslationX="5"
+            TranslationY="-5"
+            ZIndex="1"
+            InputTransparent="True"
+            IsVisible="False">
 
-            </Grid>
-            <Border 
-                StrokeThickness="1" 
-                Padding="12">
-
-                <VerticalStackLayout>
-
-                    <Entry 
-                x:Name="BuscarEntry"
-                Placeholder="Buscar productos..."
-                HeightRequest="50"
-                FontSize="16"
-                ClearButtonVisibility="WhileEditing"
-                TextChanged="OnBuscarTextChanged"
-                Focused="OnBuscarFocused"
-                Completed="OnBuscarCompleted" />
-
-                    <CollectionView
-                    x:Name="SugerenciasCollection"
-                    IsVisible="False"
-                    SelectionMode="Single"
-                    SelectionChanged="OnSugerenciaSeleccionada"
-                    MaximumHeightRequest="200"
-                    ZIndex="10">
-
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Padding="10">
-                                    <Label
-                    Text="{Binding Nombre}"
-                    FontSize="15" />
-                                </Grid>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-
-                    </CollectionView>
-
-                </VerticalStackLayout>
-
-            </Border>
-            <Label 
-                Text="Categorías" 
-                FontSize="22" 
-                FontAttributes="Bold" />
-            <HorizontalStackLayout
-                Spacing="10"
-                HorizontalOptions="Center">
- 
-                <Button
-                Text="Todas"
-                Clicked="OnTodasCategoriasClicked" />
-
-            </HorizontalStackLayout>
-
-            <HorizontalStackLayout
-                Spacing="6"
-                HorizontalOptions="Center">
-
-                <Button
-                Text="Electrónica"
-                Clicked="OnCategoriaClicked"
-                CommandParameter="1" />
-
-                <Button
-                Text="Libros"
-                Clicked="OnCategoriaClicked"
-                CommandParameter="2" />
-
-            </HorizontalStackLayout>
-
-            <HorizontalStackLayout
-              Spacing="6"
-              HorizontalOptions="Center">
-
-                <Button
-              Text="Ropa"
-              Clicked="OnCategoriaClicked"
-              CommandParameter="3" />
-
-                <Button
-              Text="Muebles"
-              Clicked="OnCategoriaClicked"
-              CommandParameter="4" />
-
-            </HorizontalStackLayout>
-
-            <HorizontalStackLayout
-               Spacing="6"
-               HorizontalOptions="Center">
-
-                <Button
-               Text="Videojuegos"
-               Clicked="OnCategoriaClicked"
-               CommandParameter="5" />
-
-                <Button
-               Text="Otros"
-               Clicked="OnCategoriaClicked"
-               CommandParameter="6" />
-
-            </HorizontalStackLayout>
-
-            <Button
-        x:Name="FiltrosButton"
-        Text="🔎 Filtros"
-        Clicked="OnFiltrosClicked"
-        Margin="0,10,0,5" />
-
-            <VerticalStackLayout
-        x:Name="FiltrosLayout"
-        IsVisible="False"
-        Spacing="8">
-
-                <Label
-        Text="Condición"
-        FontSize="20"
-        FontAttributes="Bold"
-        Margin="0,5,0,0" />
-
-                <Picker
-        x:Name="CondicionPicker"
-        Title="Selecciona una condición"
-        SelectedIndexChanged="OnCondicionChanged">
-
-                    <Picker.Items>
-                        <x:String>Todas</x:String>
-                        <x:String>Nuevo</x:String>
-                        <x:String>Usado</x:String>
-                    </Picker.Items>
-
-                </Picker>
-
-                <Label
-            Text="Rango de precio"
-            FontSize="20"
-            FontAttributes="Bold"
-            Margin="0,5,0,0" />
-
-                <Grid
-            ColumnDefinitions="*,*"
-            ColumnSpacing="10">
-
-                    <Entry
-            x:Name="PrecioMinimoEntry"
-            Grid.Column="0"
-            Placeholder="Precio mínimo"
-            Keyboard="Numeric"
-            TextChanged="OnPrecioChanged" />
-
-                    <Entry
-            x:Name="PrecioMaximoEntry"
-            Grid.Column="1"
-            Placeholder="Precio máximo"
-            Keyboard="Numeric"
-            TextChanged="OnPrecioChanged" />
+                        <Label x:Name="ConversacionesBadgeLabel"
+               Text="1"
+               FontSize="11"
+               FontAttributes="Bold"
+               TextColor="#FFFFFF"
+               HorizontalTextAlignment="Center"
+               VerticalTextAlignment="Center"/>
+                    </Border>
 
                 </Grid>
+            </Grid>
 
-                <Label
-            Text="Ordenar por"
-            FontSize="20"
-            FontAttributes="Bold"
-            Margin="0,10,0,0" />
+            <!-- Barra de búsqueda -->
+            <Border BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#292929}"
+                    Stroke="{AppThemeBinding Light=#DDDDDD, Dark=#444444}"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 14"
+                    Padding="12,2">
 
-                <Picker
-            x:Name="OrdenarPicker"
-            Title="Selecciona un orden"
-            SelectedIndexChanged="OnOrdenarChanged">
+                <Grid ColumnDefinitions="Auto,* ,Auto"
+                      ColumnSpacing="8">
 
-                    <Picker.Items>
-                        <x:String>Sin ordenar</x:String>
-                        <x:String>Más recientes</x:String>
-                        <x:String>Más antiguos</x:String>
-                        <x:String>Precio: menor a mayor</x:String>
-                        <x:String>Precio: mayor a menor</x:String>
-                        <x:String>Nombre: A-Z</x:String>
-                        <x:String>Nombre: Z-A</x:String>
-                    </Picker.Items>
+                    <Label Grid.Column="0"
+                           Text="🔎"
+                           FontSize="18"
+                           VerticalOptions="Center"/>
 
-                </Picker>
+                    <Entry x:Name="BuscarEntry"
+                           Grid.Column="1"
+                           Placeholder="¿Qué estás buscando?"
+                           ReturnType="Search"
+                           Completed="OnBuscarCompleted"
+                           BackgroundColor="Transparent"
+                           ClearButtonVisibility="WhileEditing"
+                           VerticalOptions="Center"/>
 
-                <Button
-            Text="🔎 Aplicar filtros"
-            Clicked="OnAplicarFiltrosClicked"
-            Margin="0,5,0,5" />
+                    <Button Grid.Column="2"
+                            Text="Buscar"
+                            Clicked="OnBuscarCompleted"
+                            FontSize="13"
+                            Padding="10,7"
+                            CornerRadius="10"
+                            VerticalOptions="Center"/>
+                </Grid>
+            </Border>
 
-                <Button
-            Text="🧹 Limpiar filtros"
-            Clicked="OnLimpiarFiltrosClicked"
-            Margin="0,5,0,10" />
+            <!-- Accesos rápidos -->
+            <ScrollView Orientation="Horizontal"
+                        HorizontalScrollBarVisibility="Never">
 
-            </VerticalStackLayout>
+                <HorizontalStackLayout Spacing="8">
 
-            <Label 
-                Text="Productos recientes" 
-                FontSize="22" 
-                FontAttributes="Bold" 
-                Margin="0,10,0,0" />
+                    <Button Text="Todas"
+                            Clicked="OnTodasCategoriasClicked"
+                            FontSize="12"
+                            Padding="14,8"
+                            CornerRadius="18"/>
 
-            <Label
-                x:Name="SinResultadosLabel"
-                Text="🔍 No encontramos productos"
-                FontSize="18"
-                FontAttributes="Bold"
-                HorizontalOptions="Center"
-                HorizontalTextAlignment="Center"
-                IsVisible="False"
-                Margin="0,20,0,10" />
-            <CollectionView
-                x:Name="ProductosCollection"
-                SelectionMode="None">
+                    <Button Text="Electrónica"
+                            CommandParameter="1"
+                            Clicked="OnCategoriaClicked"
+                            FontSize="12"
+                            Padding="12,8"
+                            CornerRadius="18"/>
 
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-                        <Border
-                StrokeThickness="1"
-                Padding="15"
-                Margin="0,0,0,10">
+                    <Button Text="Libros"
+                            CommandParameter="2"
+                            Clicked="OnCategoriaClicked"
+                            FontSize="12"
+                            Padding="12,8"
+                            CornerRadius="18"/>
 
-                            <Border.GestureRecognizers>
-                                <TapGestureRecognizer
-                        Tapped="OnProductoTapped" />
-                            </Border.GestureRecognizers>
+                    <Button Text="Ropa"
+                            CommandParameter="3"
+                            Clicked="OnCategoriaClicked"
+                            FontSize="12"
+                            Padding="12,8"
+                            CornerRadius="18"/>
 
-                            <VerticalStackLayout
-                    Spacing="8">
+                    <Button Text="Muebles"
+                            CommandParameter="4"
+                            Clicked="OnCategoriaClicked"
+                            FontSize="12"
+                            Padding="12,8"
+                            CornerRadius="18"/>
 
-                                <Image
-                        Source="{Binding ImagenUrl}"
-                        HeightRequest="180"
-                        Aspect="AspectFit" />
+                    <Button Text="Videojuegos"
+                            CommandParameter="5"
+                            Clicked="OnCategoriaClicked"
+                            FontSize="12"
+                            Padding="12,8"
+                            CornerRadius="18"/>
 
-                                <Label
-                        Text="{Binding Nombre}"
-                        FontSize="18"
-                        FontAttributes="Bold" 
-                        TextColor="#E0E0E0" />
+                    <Button Text="Otros"
+                            CommandParameter="6"
+                            Clicked="OnCategoriaClicked"
+                            FontSize="12"
+                            Padding="12,8"
+                            CornerRadius="18"/>
 
-                                <Label
-                        Text="{Binding Precio, StringFormat='{}{0:C}'}"
-                        FontSize="20" />
+                </HorizontalStackLayout>
+            </ScrollView>
 
-                                <Label
-                        Text="{Binding Condicion}" />
+            <!-- Acciones de usuario -->
+            <Grid RowDefinitions="Auto,Auto"
+                  ColumnDefinitions="*,*,*"
+                  ColumnSpacing="8"
+                  RowSpacing="8">
 
-                                <Label
-                        Text="{Binding EstadoTexto}"
-                        FontSize="14" />
+                <!-- Primera fila -->
+                <Button Grid.Row="0"
+            Grid.Column="0"
+            Text="♡ Favoritos"
+            Clicked="OnAbrirFavoritosClicked"
+            FontSize="11"
+            Padding="4,9"
+            CornerRadius="10"/>
 
-                                <Label
-                        Text="{Binding FechaPublicacionTexto}"
-                        FontSize="14"
-                        TextColor="Gray" />
+                <Button Grid.Row="0"
+            Grid.Column="1"
+            Text="＋ Publicar"
+            Clicked="OnAbrirPublicarProductoClicked"
+            FontSize="11"
+            Padding="4,9"
+            CornerRadius="10"/>
 
-                            </VerticalStackLayout>
+                <Button Grid.Row="0"
+            Grid.Column="2"
+            Text="Mis productos"
+            Clicked="OnAbrirMisPublicacionesClicked"
+            FontSize="11"
+            Padding="4,9"
+            CornerRadius="10"/>
 
-                        </Border>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
+                <!-- Segunda fila: solo con sesión iniciada -->
 
-            </CollectionView>
+                <!-- Mis compras -->
+                <Grid Grid.Row="1"
+      Grid.Column="0"
+      IsVisible="False"
+      x:Name="MisComprasContenedor">
+
+                    <Button x:Name="MisComprasButton"
+            Text="Mis compras"
+            Clicked="OnAbrirMisComprasClicked"
+            FontSize="11"
+            Padding="4,9"
+            CornerRadius="10"
+            IsVisible="True"/>
+
+                    <Border x:Name="MisComprasBadge"
+            WidthRequest="22"
+            HeightRequest="22"
+            BackgroundColor="#E53935"
+            Stroke="#FFFFFF"
+            StrokeThickness="1.5"
+            StrokeShape="RoundRectangle 11"
+            HorizontalOptions="End"
+            VerticalOptions="Start"
+            TranslationX="5"
+            TranslationY="-5"
+            ZIndex="1"
+            InputTransparent="True"
+            IsVisible="False">
+
+                        <Label x:Name="MisComprasBadgeLabel"
+               FontSize="11"
+               FontAttributes="Bold"
+               TextColor="#FFFFFF"
+               HorizontalTextAlignment="Center"
+               VerticalTextAlignment="Center"/>
+                    </Border>
+                </Grid>
+
+                <!-- Mis ventas -->
+                <Grid Grid.Row="1"
+      Grid.Column="1"
+      IsVisible="False"
+      x:Name="MisVentasContenedor">
+
+                    <Button x:Name="MisVentasButton"
+            Text="Mis ventas"
+            Clicked="OnAbrirMisVentasClicked"
+            FontSize="11"
+            Padding="4,9"
+            CornerRadius="10"
+            IsVisible="True"/>
+
+                    <Border x:Name="MisVentasBadge"
+            WidthRequest="22"
+            HeightRequest="22"
+            BackgroundColor="#E53935"
+            Stroke="#FFFFFF"
+            StrokeThickness="1.5"
+            StrokeShape="RoundRectangle 11"
+            HorizontalOptions="End"
+            VerticalOptions="Start"
+            TranslationX="5"
+            TranslationY="-5"
+            ZIndex="1"
+            InputTransparent="True"
+            IsVisible="False">
+
+                        <Label x:Name="MisVentasBadgeLabel"
+               FontSize="11"
+               FontAttributes="Bold"
+               TextColor="#FFFFFF"
+               HorizontalTextAlignment="Center"
+               VerticalTextAlignment="Center"/>
+                    </Border>
+                </Grid>
+
+                <Button x:Name="CarritoButton"
+        Grid.Row="1"
+        Grid.Column="2"
+        Text="🛒 Mi carrito"
+        Clicked="OnAbrirCarritoClicked"
+        FontSize="11"
+        Padding="4,9"
+        CornerRadius="10"
+        IsVisible="False"/>
+                
+            </Grid>
 
         </VerticalStackLayout>
-        
-    </ScrollView>
-    
+
+        <!-- Productos -->
+        <Grid Grid.Row="1"
+              RowDefinitions="Auto,*"
+              Padding="12,4,12,12"
+              RowSpacing="8">
+
+            <Label Grid.Row="0"
+                   Text="Explora productos"
+                   FontSize="19"
+                   FontAttributes="Bold"
+                   Margin="4,0,0,0"
+                   TextColor="{AppThemeBinding Light=#202124, Dark=#FFFFFF}"/>
+
+            <Grid Grid.Row="1">
+
+                <CollectionView x:Name="ProductosCollection"
+                                SelectionMode="None"
+                                ItemsLayout="VerticalGrid, 3"
+                                VerticalScrollBarVisibility="Default"
+                                Scrolled="OnProductosScrolled">
+
+                    <CollectionView.EmptyView>
+                        <VerticalStackLayout Padding="20"
+                                             Spacing="8"
+                                             VerticalOptions="Center"
+                                             HorizontalOptions="Center">
+
+                            <Label Text="No hay productos para mostrar"
+                                   FontSize="16"
+                                   HorizontalTextAlignment="Center"/>
+
+                            <Label Text="Prueba otra categoría o vuelve a intentarlo más tarde."
+                                   FontSize="13"
+                                   TextColor="Gray"
+                                   HorizontalTextAlignment="Center"/>
+                        </VerticalStackLayout>
+                    </CollectionView.EmptyView>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+
+                            <Border Margin="3"
+                                    Padding="6"
+                                    Stroke="{AppThemeBinding Light=#E2E2E2, Dark=#3A3A3A}"
+                                    StrokeThickness="1"
+                                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#242424}"
+                                    StrokeShape="RoundRectangle 12">
+
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnProductoTapped"/>
+                                </Border.GestureRecognizers>
+
+
+                                <Grid RowDefinitions="110,Auto,Auto,Auto"
+                                      RowSpacing="4">
+
+                                    <!-- Imagen y botón de favoritos -->
+                                    <Grid Grid.Row="0">
+
+                                        <Image Source="{Binding ImagenUrl}"
+               Aspect="AspectFill"
+               HeightRequest="110"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"/>
+
+                                        <Button
+            Text="{Binding EsFavorito, Converter={StaticResource FavoritoCorazonConverter}}"
+            Clicked="OnFavoritoCorazonClicked"
+            BackgroundColor="#FFFFFF"
+            TextColor="#E53935"
+            FontSize="20"
+            Padding="0"
+            WidthRequest="34"
+            HeightRequest="34"
+            CornerRadius="17"
+            HorizontalOptions="End"
+            VerticalOptions="Start"
+            Margin="4"
+            ZIndex="1"/>
+
+                                        <Button Text="{Binding EstaEnCarrito, Converter={StaticResource CarritoIconoConverter}}"
+        Clicked="OnCarritoProductoClicked"
+        BackgroundColor="#FFFFFF"
+        TextColor="#333333"
+        FontSize="18"
+        WidthRequest="38"
+        HeightRequest="38"
+        CornerRadius="19"
+        Padding="0"
+        HorizontalOptions="Start"
+        VerticalOptions="Start"
+        Margin="8" />
+
+                                    </Grid>
+
+
+                                    <Label Grid.Row="1"
+                                           Text="{Binding Nombre}"
+                                           FontSize="12"
+                                           MaxLines="2"
+                                           LineBreakMode="TailTruncation"
+                                           TextColor="{AppThemeBinding Light=#222222, Dark=#FFFFFF}"
+                                           VerticalOptions="Start"/>
+
+                                    <Label Grid.Row="2"
+                                           Text="{Binding Precio, StringFormat='{}{0:C}'}"
+                                           FontSize="14"
+                                           FontAttributes="Bold"
+                                           TextColor="{AppThemeBinding Light=#147D3F, Dark=#70D99A}"
+                                           LineBreakMode="TailTruncation"/>
+
+                                    <Label Grid.Row="3"
+                                           Text="{Binding Condicion}"
+                                           FontSize="10"
+                                           TextColor="Gray"
+                                           LineBreakMode="TailTruncation"/>
+
+                                </Grid>
+                            </Border>
+
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+
+            </Grid>
+        </Grid>
+
+    </Grid>
 </ContentPage>

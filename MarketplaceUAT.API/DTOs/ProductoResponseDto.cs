@@ -8,6 +8,10 @@
 
         public int IdCategoria { get; set; }
 
+        public bool EsProductoUnico { get; set; }
+
+        public int CantidadDisponible { get; set; }
+
         public string Nombre { get; set; } = string.Empty;
 
         public string? Descripcion { get; set; }

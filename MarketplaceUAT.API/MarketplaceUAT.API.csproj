@@ -4,17 +4,20 @@
 	<TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>9fbe0205-513c-4add-b784-0bf2efee223e</UserSecretsId>
+	<AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
   </PropertyGroup>
 
   <ItemGroup>
-	<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
-	<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
-	  <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.13">
+	<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
+	<PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.14" />
+	<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
+	  <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.14">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,7 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="wwwroot\Images\" />
+    <Folder Include="wwwroot\Images\Chat\" />
+    <Folder Include="wwwroot\Images\Perfiles\" />
+    <Folder Include="wwwroot\Images\Productos\" />
   </ItemGroup>
 
 </Project>

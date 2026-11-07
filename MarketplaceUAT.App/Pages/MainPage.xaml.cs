@@ -7,78 +7,270 @@ namespace MarketplaceUAT.App.Pages
 {
     public partial class MainPage : ContentPage
     {
-        private const string BusquedasRecientesKey = "BusquedasRecientes";
-        private List<string> BusquedasRecientes = new();
+        private ApiClient Api =>
+        Application.Current!.Handler.MauiContext!.Services
+        .GetRequiredService<ApiClient>();
         private List<Producto> TodosLosProductos = new();
-        private int? CategoriaSeleccionada = null;
-        private string? CondicionSeleccionada = null;
-        private decimal? PrecioMinimo = null;
-        private decimal? PrecioMaximo = null;
-        private int? CategoriaPendiente = null;
-        private string? CondicionPendiente = null;
-        private decimal? PrecioMinimoPendiente = null;
-        private decimal? PrecioMaximoPendiente = null;
-        private string OrdenSeleccionado = "Más recientes";
-        private bool BusquedaEjecutada = false;
+        private HashSet<int> IdsProductosFavoritos = new();
+        private HashSet<int> IdsProductosCarrito = new();
+        private int _ultimoIndiceVisible = -1;
+        private int? _ultimoProductoVisibleId = null;
+
         public MainPage()
         {
             InitializeComponent();
-            CargarBusquedasRecientes();
             ActualizarSesion();
             ActualizarBotonConversaciones();
+        }
+        protected override async void OnAppearing()
+        {
+            base.OnAppearing();
 
+            ActualizarSesion();
+            ActualizarBotonConversaciones();
+            await ActualizarInsigniaConversaciones();
+            await ActualizarInsigniasTransacciones();
+            await CargarIdsFavoritos();
+            await CargarProductos();
+            await CargarIdsCarrito();
+        }
+
+        private void OnProductosScrolled(
+    object sender,
+    ItemsViewScrolledEventArgs e)
+        {
+            if (e.FirstVisibleItemIndex >= 0)
+            {
+                _ultimoIndiceVisible = e.FirstVisibleItemIndex;
+
+                if (ProductosCollection.ItemsSource is List<Producto> productos &&
+                    e.FirstVisibleItemIndex < productos.Count)
+                {
+                    _ultimoProductoVisibleId =
+                        productos[e.FirstVisibleItemIndex].IdProducto;
+                }
+            }
         }
 
         private void ActualizarBotonConversaciones()
         {
             ConversacionesButton.IsVisible =
                 SesionUsuario.EstaLogueado;
-        }
-        private void CargarBusquedasRecientes()
-        {
-            string datosGuardados =
-                Preferences.Default.Get(
-                    BusquedasRecientesKey,
-                    string.Empty);
 
-            if (string.IsNullOrWhiteSpace(datosGuardados))
+            if (!SesionUsuario.EstaLogueado)
             {
+                ConversacionesBadge.IsVisible = false;
+                ConversacionesBadgeLabel.Text = string.Empty;
+            }
+        }
+
+        private class ConversacionNotificacionDto
+        {
+            public int IdConversacion { get; set; }
+
+            public int MensajesSinLeer { get; set; }
+        }
+
+        private class NotificacionesTransaccionConteoDto
+        {
+            public int Compras { get; set; }
+
+            public int Ventas { get; set; }
+        }
+
+        private async Task ActualizarInsigniaConversaciones()
+        {
+            if (!SesionUsuario.EstaLogueado)
+            {
+                ConversacionesBadge.IsVisible = false;
+                ConversacionesBadgeLabel.Text = string.Empty;
                 return;
             }
 
-            BusquedasRecientes =
-                datosGuardados
-                    .Split('|', StringSplitOptions.RemoveEmptyEntries)
-                    .ToList();
+            try
+            {
+                string url =
+    $"{ApiConfig.BaseUrl}/api/Conversaciones/Usuario";
+
+                using var response = await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Get, url));
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"No se pudo consultar la insignia de chats. " +
+                        $"Código: {(int)response.StatusCode}");
+
+                    return;
+                }
+
+                string json = await response.Content.ReadAsStringAsync();
+
+                var conversaciones =
+                    JsonSerializer.Deserialize<List<ConversacionNotificacionDto>>(
+                        json,
+                        new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+
+                int conversacionesSinLeer = conversaciones?
+                    .Count(c => c.MensajesSinLeer > 0) ?? 0;
+
+                ConversacionesBadgeLabel.Text =
+                    conversacionesSinLeer.ToString();
+
+                ConversacionesBadge.IsVisible =
+                    conversacionesSinLeer > 0;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Error al actualizar la insignia de chats: {ex.Message}");
+            }
         }
-        protected override async void OnAppearing()
+
+        private async Task ActualizarInsigniasTransacciones()
         {
-            base.OnAppearing();
-
-            ActualizarBotonConversaciones();
-
-            ActualizarSesion();
-
-            await CargarProductos();
-
-            if (string.IsNullOrWhiteSpace(CondicionSeleccionada))
+            if (!SesionUsuario.EstaLogueado)
             {
-                CondicionPicker.SelectedItem = "Todas";
-            }
-            else
-            {
-                CondicionPicker.SelectedItem = CondicionSeleccionada;
+                MisComprasBadge.IsVisible = false;
+                MisComprasBadgeLabel.Text = string.Empty;
+
+                MisVentasBadge.IsVisible = false;
+                MisVentasBadgeLabel.Text = string.Empty;
+
+                return;
             }
 
-            AplicarFiltros();
+            try
+            {
+                string url =
+    $"{ApiConfig.BaseUrl}/api/NotificacionesTransacciones/ConteoPorSeccion";
+
+                using var response = await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Get, url));
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"No se pudieron consultar las insignias de transacciones. " +
+                        $"Código: {(int)response.StatusCode}");
+
+                    return;
+                }
+
+                string json = await response.Content.ReadAsStringAsync();
+
+                var conteo =
+                    JsonSerializer.Deserialize<NotificacionesTransaccionConteoDto>(
+                        json,
+                        new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+
+                int compras = conteo?.Compras ?? 0;
+                int ventas = conteo?.Ventas ?? 0;
+
+                MisComprasBadgeLabel.Text = compras.ToString();
+                MisComprasBadge.IsVisible = compras > 0;
+
+                MisVentasBadgeLabel.Text = ventas.ToString();
+                MisVentasBadge.IsVisible = ventas > 0;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Error al actualizar las insignias de transacciones: {ex.Message}");
+            }
+        }
+
+        private async Task CargarIdsFavoritos()
+        {
+            IdsProductosFavoritos.Clear();
+
+            if (!SesionUsuario.EstaLogueado)
+                return;
+
+            try
+            {
+                string url = $"{ApiConfig.BaseUrl}/api/Favoritos";
+
+                using var response = await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Get, url));
+
+                if (!response.IsSuccessStatusCode)
+                    return;
+
+                string json = await response.Content.ReadAsStringAsync();
+
+                var favoritos = JsonSerializer.Deserialize<List<Favorito>>(
+                    json,
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                if (favoritos == null)
+                    return;
+
+                IdsProductosFavoritos = favoritos
+                    .Select(f => f.IdProducto)
+                    .ToHashSet();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Error al cargar favoritos: {ex.Message}");
+            }
+        }
+
+        private async Task CargarIdsCarrito()
+        {
+            IdsProductosCarrito.Clear();
+
+            if (!SesionUsuario.EstaLogueado)
+                return;
+
+            try
+            {
+                string url = $"{ApiConfig.BaseUrl}/api/Carrito";
+
+                using var response = await Api.EnviarAutenticadoAsync(() =>
+                    new HttpRequestMessage(HttpMethod.Get, url));
+
+                if (!response.IsSuccessStatusCode)
+                    return;
+
+                string json = await response.Content.ReadAsStringAsync();
+
+                var productos = JsonSerializer.Deserialize<List<CarritoItem>>(
+                    json,
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                if (productos == null)
+                    return;
+
+                IdsProductosCarrito = productos
+                    .Select(p => p.IdProducto)
+                    .ToHashSet();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Error al cargar productos del carrito: {ex.Message}");
+            }
         }
 
         private async Task CargarProductos()
         {
             try
             {
-                var api = new ApiClient();
-                var client = api.Client;
+                var client = Api.Client;
 
                 string url = $"{ApiConfig.BaseUrl}/api/Productos";
 
@@ -96,12 +288,13 @@ namespace MarketplaceUAT.App.Pages
 
                 string json = await response.Content.ReadAsStringAsync();
 
-                var productos = JsonSerializer.Deserialize<List<Producto>>(
-                    json,
-                    new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
+                var productos =
+                    JsonSerializer.Deserialize<List<Producto>>(
+                        json,
+                        new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
 
                 if (productos == null)
                 {
@@ -115,50 +308,84 @@ namespace MarketplaceUAT.App.Pages
 
                 foreach (var producto in productos)
                 {
+                    // Imagen predeterminada si no se encuentra una principal.
+                    producto.ImagenUrl = "dotnet_bot.png";
+
                     try
                     {
                         string imagenesUrl =
-                             $"{ApiConfig.BaseUrl}/api/ImagenesProducto/Producto/{producto.IdProducto}";
+                            $"{ApiConfig.BaseUrl}/api/ImagenesProducto/Producto/{producto.IdProducto}";
 
-                        var imagenesResponse = await client.GetAsync(imagenesUrl);
+                        var imagenesResponse =
+                            await client.GetAsync(imagenesUrl);
 
                         if (imagenesResponse.IsSuccessStatusCode)
                         {
                             string imagenesJson =
                                 await imagenesResponse.Content.ReadAsStringAsync();
 
-                            var imagenes = JsonSerializer.Deserialize<List<ImagenProducto>>(
-                                imagenesJson,
-                                new JsonSerializerOptions
-                                {
-                                    PropertyNameCaseInsensitive = true
-                                });
+                            var imagenes =
+                                JsonSerializer.Deserialize<List<ImagenProducto>>(
+                                    imagenesJson,
+                                    new JsonSerializerOptions
+                                    {
+                                        PropertyNameCaseInsensitive = true
+                                    });
 
                             var imagenPrincipal = imagenes?
                                 .FirstOrDefault(i => i.EsPrincipal);
 
-                            if (imagenPrincipal != null)
+                            if (imagenPrincipal != null &&
+                                !string.IsNullOrWhiteSpace(
+                                    imagenPrincipal.UrlImagen))
                             {
                                 producto.ImagenUrl =
-                                       $"{ApiConfig.BaseUrl}/Images/{imagenPrincipal.UrlImagen}";
-                            }
-                            else
-                            {
-                                producto.ImagenUrl = "dotnet_bot.png";
+                                    $"{ApiConfig.BaseUrl.TrimEnd('/')}/Images/{imagenPrincipal.UrlImagen.TrimStart('/')}";
                             }
                         }
                     }
                     catch
                     {
-
+                        // Si falla la carga de una imagen, se conserva
+                        // la imagen predeterminada del producto.
                     }
                 }
 
                 TodosLosProductos = productos;
-                ProductosCollection.ItemsSource = productos;
+
+                // Marcar cuáles productos están en favoritos y en el carrito.
+                foreach (var producto in TodosLosProductos)
+                {
+                    producto.EsFavorito =
+                        IdsProductosFavoritos.Contains(producto.IdProducto);
+
+                    producto.EstaEnCarrito =
+                        IdsProductosCarrito.Contains(producto.IdProducto);
+                }
+
+                // Mostrar primero los productos más recientes.
+                var resultado = TodosLosProductos
+                    .OrderByDescending(p => p.FechaPublicacion)
+                    .ToList();
+
+                ProductosCollection.ItemsSource = resultado;
+
+                if (_ultimoProductoVisibleId.HasValue)
+                {
+                    int indice = resultado.FindIndex(
+                        p => p.IdProducto == _ultimoProductoVisibleId.Value);
+
+                    if (indice >= 0)
+                    {
+                        await Task.Delay(300);
+
+                        ProductosCollection.ScrollTo(
+                            indice,
+                            position: ScrollToPosition.Start,
+                            animate: false);
+                    }
+                }
             }
-
-
             catch (Exception ex)
             {
                 await DisplayAlertAsync(
@@ -167,12 +394,52 @@ namespace MarketplaceUAT.App.Pages
                     "OK");
             }
         }
-        private async void OnAbrirLoginClicked(object sender, EventArgs e)
+
+        private async void OnBuscarCompleted(
+            object sender,
+            EventArgs e)
         {
-            await Shell.Current.GoToAsync(nameof(LoginPage));
+            await AbrirBusqueda();
         }
 
-        private async void OnSesionButtonClicked(object sender, EventArgs e)
+        private async Task AbrirBusqueda()
+        {
+            string textoBusqueda =
+                BuscarEntry.Text?.Trim() ?? string.Empty;
+
+            string ruta = string.IsNullOrWhiteSpace(textoBusqueda)
+                ? nameof(SearchPage)
+                : $"{nameof(SearchPage)}?textoBusqueda={Uri.EscapeDataString(textoBusqueda)}";
+
+            await Shell.Current.GoToAsync(ruta);
+        }
+
+        private async void OnCategoriaClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (sender is not Button button ||
+                !int.TryParse(
+                    button.CommandParameter?.ToString(),
+                    out int idCategoria))
+            {
+                return;
+            }
+
+            await Shell.Current.GoToAsync(
+                $"{nameof(SearchPage)}?categoriaId={idCategoria}");
+        }
+
+        private async void OnTodasCategoriasClicked(
+            object sender,
+            EventArgs e)
+        {
+            await Shell.Current.GoToAsync(nameof(SearchPage));
+        }
+
+        private async void OnSesionButtonClicked(
+            object sender,
+            EventArgs e)
         {
             if (SesionUsuario.EstaLogueado)
             {
@@ -198,418 +465,41 @@ namespace MarketplaceUAT.App.Pages
             await Shell.Current.GoToAsync(nameof(LoginPage));
         }
 
-        private async void OnAbrirFavoritosClicked(object sender, EventArgs e)
+        private async void OnAbrirFavoritosClicked(
+            object sender,
+            EventArgs e)
         {
             if (!SesionUsuario.EstaLogueado)
-            {
-                await Shell.Current.GoToAsync(nameof(RequiereCuentaPage));
-                return;
-            }
-
-            await Shell.Current.GoToAsync(nameof(FavoritosPage));
-        }
-
-        private async void OnAbrirPublicarProductoClicked(object sender, EventArgs e)
-        {
-            if (!SesionUsuario.EstaLogueado)
-            {
-                await Shell.Current.GoToAsync(nameof(RequiereCuentaPage));
-                return;
-            }
-
-            await Shell.Current.GoToAsync(nameof(PublicarProductoPage));
-        }
-
-        private void ActualizarSesion()
-        {
-            if (SesionUsuario.EstaLogueado)
-            {
-                var usuario = SesionUsuario.UsuarioActual!;
-
-                SesionButton.Text =
-                    $"👤 {usuario.Nombres} {usuario.Apellidos} - Cerrar sesión";
-
-                // Mostrar el avatar cuando hay una sesión activa.
-                PerfilAvatarBorder.IsVisible = true;
-
-                // El botón comparte el espacio con el avatar.
-                SesionButton.HorizontalOptions = LayoutOptions.Fill;
-                SesionButton.WidthRequest = -1;
-
-                if (!string.IsNullOrWhiteSpace(usuario.UrlFotoPerfil))
-                {
-                    string rutaFoto = usuario.UrlFotoPerfil.TrimStart('/');
-
-                    string urlFoto =
-                        $"{ApiConfig.BaseUrl.TrimEnd('/')}/{rutaFoto}";
-
-                    PerfilFotoImage.Source = new UriImageSource
-                    {
-                        Uri = new Uri(urlFoto),
-                        CachingEnabled = false
-                    };
-
-                    PerfilFotoImage.IsVisible = true;
-                    PerfilPlaceholder.IsVisible = false;
-                }
-                else
-                {
-                    PerfilFotoImage.Source = null;
-                    PerfilFotoImage.IsVisible = false;
-                    PerfilPlaceholder.IsVisible = true;
-                }
-            }
-            else
-            {
-                SesionButton.Text = "Iniciar sesión";
-
-                // Ocultar el avatar cuando no hay sesión.
-                PerfilAvatarBorder.IsVisible = false;
-
-                // El botón ocupa toda la fila.
-                SesionButton.HorizontalOptions = LayoutOptions.Fill;
-                SesionButton.WidthRequest = -1;
-
-                PerfilFotoImage.Source = null;
-                PerfilFotoImage.IsVisible = false;
-                PerfilPlaceholder.IsVisible = true;
-            }
-        }
-
-        private async void OnProductoTapped(object sender, TappedEventArgs e)
-        {
-            if (sender is Border border &&
-                border.BindingContext is MarketplaceUAT.App.Models.Producto producto)
             {
                 await Shell.Current.GoToAsync(
-                    $"{nameof(ProductoDetallePage)}?idProducto={producto.IdProducto}");
-            }
-        }
+                    nameof(RequiereCuentaPage));
 
-        private async void OnCalculadoraTapped(object sender, TappedEventArgs e)
-        {
+                return;
+            }
+
             await Shell.Current.GoToAsync(
-                $"{nameof(ProductoDetallePage)}?idProducto=1");
+                nameof(FavoritosPage));
         }
-        private void OnBuscarCompleted(object sender, EventArgs e)
-        {
-            string textoBusqueda = BuscarEntry.Text?.Trim() ?? string.Empty;
 
-            if (string.IsNullOrWhiteSpace(textoBusqueda))
+        private async void OnAbrirPublicarProductoClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (!SesionUsuario.EstaLogueado)
             {
+                await Shell.Current.GoToAsync(
+                    nameof(RequiereCuentaPage));
+
                 return;
             }
 
-            BusquedasRecientes.Remove(textoBusqueda);
-            BusquedasRecientes.Insert(0, textoBusqueda);
-
-            if (BusquedasRecientes.Count > 5)
-            {
-                BusquedasRecientes.RemoveAt(
-                    BusquedasRecientes.Count - 1);
-            }
-
-            Preferences.Default.Set(
-            BusquedasRecientesKey,
-            string.Join("|", BusquedasRecientes));
-
-            BusquedaEjecutada = true;
-            BuscarEntry.Unfocus();
-
-            SugerenciasCollection.IsVisible = false;
-
-            AplicarFiltros();
-
-            BuscarEntry.Text = string.Empty;
+            await Shell.Current.GoToAsync(
+                nameof(PublicarProductoPage));
         }
 
-        private void OnBuscarTextChanged(object sender, TextChangedEventArgs e)
-        {
-            string texto = BuscarEntry.Text?.Trim() ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(texto))
-            {
-                SugerenciasCollection.IsVisible = false;
-                return;
-            }
-
-            var sugerencias = TodosLosProductos
-                .Where(p =>
-                    !string.IsNullOrWhiteSpace(p.Nombre) &&
-                    p.Nombre.Contains(
-                        texto,
-                        StringComparison.OrdinalIgnoreCase))
-                .GroupBy(
-                    p => p.Nombre,
-                    StringComparer.OrdinalIgnoreCase)
-                .Select(grupo => grupo.First())
-                .OrderByDescending(p =>
-                    p.Nombre.StartsWith(
-                        texto,
-                        StringComparison.OrdinalIgnoreCase))
-                .ThenBy(p => p.Nombre)
-                .Take(5)
-                .ToList();
-
-            SugerenciasCollection.ItemsSource = sugerencias;
-
-            SugerenciasCollection.IsVisible =
-                sugerencias.Count > 0;
-        }
-        private void OnBuscarFocused(object sender, FocusEventArgs e)
-        {
-            if (BusquedaEjecutada)
-            {
-                SugerenciasCollection.IsVisible = false;
-                BusquedaEjecutada = false;
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(BuscarEntry.Text) &&
-                BusquedasRecientes.Count > 0)
-            {
-                var sugerenciasRecientes = BusquedasRecientes
-                    .Select(busqueda => new Producto
-                    {
-                        Nombre = busqueda
-                    })
-                    .ToList();
-
-                SugerenciasCollection.ItemsSource = sugerenciasRecientes;
-                SugerenciasCollection.IsVisible = true;
-            }
-        }
-        private void OnSugerenciaSeleccionada(
-        object sender,
-        SelectionChangedEventArgs e)
-        {
-            var seleccion = e.CurrentSelection.FirstOrDefault();
-
-            if (seleccion is Producto producto)
-            {
-                BuscarEntry.Text = producto.Nombre;
-            }
-            else if (seleccion is string busqueda)
-            {
-                BuscarEntry.Text = busqueda;
-            }
-            else
-            {
-                return;
-            }
-
-            string textoBusqueda = BuscarEntry.Text?.Trim() ?? string.Empty;
-
-            if (!string.IsNullOrWhiteSpace(textoBusqueda))
-            {
-                BusquedasRecientes.Remove(textoBusqueda);
-                BusquedasRecientes.Insert(0, textoBusqueda);
-
-                if (BusquedasRecientes.Count > 5)
-                {
-                    BusquedasRecientes.RemoveAt(
-                        BusquedasRecientes.Count - 1);
-                }
-            }
-
-            Preferences.Default.Set(
-            BusquedasRecientesKey,
-            string.Join("|", BusquedasRecientes));
-
-            BuscarEntry.Unfocus();
-
-            SugerenciasCollection.IsVisible = false;
-
-            AplicarFiltros();
-
-            BuscarEntry.Text = string.Empty;
-
-            SugerenciasCollection.SelectedItem = null;
-        }
-        private void OnCategoriaClicked(object sender, EventArgs e)
-        {
-            if (sender is not Button button)
-                return;
-
-            if (!int.TryParse(button.CommandParameter?.ToString(), out int idCategoria))
-                return;
-
-            CategoriaPendiente = idCategoria;
-            CategoriaSeleccionada = CategoriaPendiente;
-
-            AplicarFiltros();
-        }
-
-        private void OnCondicionChanged(object sender, EventArgs e)
-        {
-            if (CondicionPicker.SelectedItem is string condicion)
-            {
-                CondicionPendiente = condicion == "Todas"
-                    ? null
-                    : condicion;
-            }
-        }
-
-        private void OnPrecioChanged(object sender, TextChangedEventArgs e)
-        {
-            PrecioMinimoPendiente = null;
-            PrecioMaximoPendiente = null;
-
-            if (decimal.TryParse(PrecioMinimoEntry.Text, out decimal minimo))
-            {
-                PrecioMinimoPendiente = minimo;
-            }
-
-            if (decimal.TryParse(PrecioMaximoEntry.Text, out decimal maximo))
-            {
-                PrecioMaximoPendiente = maximo;
-            }
-        }
-
-        private void OnOrdenarChanged(object sender, EventArgs e)
-        {
-            if (OrdenarPicker.SelectedItem is string orden)
-            {
-                OrdenSeleccionado = orden;
-
-                AplicarFiltros();
-            }
-        }
-
-        private void OnAplicarFiltrosClicked(object sender, EventArgs e)
-        {
-            CategoriaSeleccionada = CategoriaPendiente;
-            CondicionSeleccionada = CondicionPendiente;
-            PrecioMinimo = PrecioMinimoPendiente;
-            PrecioMaximo = PrecioMaximoPendiente;
-
-            AplicarFiltros();
-        }
-
-        private void OnLimpiarFiltrosClicked(object sender, EventArgs e)
-        {
-            BuscarEntry.Text = string.Empty;
-
-            CategoriaSeleccionada = null;
-            CondicionSeleccionada = null;
-            PrecioMinimo = null;
-            PrecioMaximo = null;
-
-            CategoriaPendiente = null;
-            CondicionPendiente = null;
-            PrecioMinimoPendiente = null;
-            PrecioMaximoPendiente = null;
-
-            CondicionPicker.SelectedItem = "Todas";
-
-            PrecioMinimoEntry.Text = string.Empty;
-            PrecioMaximoEntry.Text = string.Empty;
-
-            OrdenSeleccionado = "Más recientes";
-            OrdenarPicker.SelectedItem = "Más recientes";
-
-            AplicarFiltros();
-        }
-        private void OnTodasCategoriasClicked(object sender, EventArgs e)
-        {
-            CategoriaPendiente = null;
-            CategoriaSeleccionada = null;
-
-            AplicarFiltros();
-        }
-
-        private void AplicarFiltros()
-        {
-            string texto = BuscarEntry.Text?.Trim() ?? string.Empty;
-
-            var productosFiltrados = TodosLosProductos.AsEnumerable();
-
-            if (CategoriaSeleccionada.HasValue)
-            {
-                productosFiltrados = productosFiltrados.Where(
-                    p => p.IdCategoria == CategoriaSeleccionada.Value);
-            }
-
-            if (!string.IsNullOrWhiteSpace(CondicionSeleccionada))
-            {
-                productosFiltrados = productosFiltrados.Where(
-                    p => p.Condicion.Equals(
-                        CondicionSeleccionada,
-                        StringComparison.OrdinalIgnoreCase));
-            }
-
-            if (PrecioMinimo.HasValue)
-            {
-                productosFiltrados = productosFiltrados.Where(
-                    p => p.Precio >= PrecioMinimo.Value);
-            }
-
-            if (PrecioMaximo.HasValue)
-            {
-                productosFiltrados = productosFiltrados.Where(
-                    p => p.Precio <= PrecioMaximo.Value);
-            }
-
-            if (!string.IsNullOrWhiteSpace(texto))
-            {
-                productosFiltrados = productosFiltrados.Where(p =>
-                    p.Nombre.Contains(
-                        texto,
-                        StringComparison.OrdinalIgnoreCase) ||
-                    (p.Descripcion != null &&
-                     p.Descripcion.Contains(
-                         texto,
-                         StringComparison.OrdinalIgnoreCase)));
-            }
-
-            var resultado = productosFiltrados.ToList();
-
-            switch (OrdenSeleccionado)
-            {
-                case "Más recientes":
-                    resultado = resultado
-                        .OrderByDescending(p => p.FechaPublicacion)
-                        .ToList();
-                    break;
-
-                case "Más antiguos":
-                    resultado = resultado
-                        .OrderBy(p => p.FechaPublicacion)
-                        .ToList();
-                    break;
-
-                case "Precio: menor a mayor":
-                    resultado = resultado
-                        .OrderBy(p => p.Precio)
-                        .ToList();
-                    break;
-
-                case "Precio: mayor a menor":
-                    resultado = resultado
-                        .OrderByDescending(p => p.Precio)
-                        .ToList();
-                    break;
-
-                case "Nombre: A-Z":
-                    resultado = resultado
-                        .OrderBy(p => p.Nombre)
-                        .ToList();
-                    break;
-
-                case "Nombre: Z-A":
-                    resultado = resultado
-                        .OrderByDescending(p => p.Nombre)
-                        .ToList();
-                    break;
-            }
-
-            ProductosCollection.ItemsSource = resultado;
-
-            SinResultadosLabel.IsVisible = resultado.Count == 0;
-        }
         private async void OnAbrirMisPublicacionesClicked(
-        object sender,
-        EventArgs e)
+            object sender,
+            EventArgs e)
         {
             if (!SesionUsuario.EstaLogueado)
             {
@@ -622,14 +512,429 @@ namespace MarketplaceUAT.App.Pages
             await Shell.Current.GoToAsync(
                 nameof(MisPublicacionesPage));
         }
-        private async void OnConversacionesClicked(object sender, EventArgs e)
+
+        private async void OnConversacionesClicked(
+            object sender,
+            EventArgs e)
         {
-            await Shell.Current.GoToAsync(nameof(ConversacionesPage));
+            if (!SesionUsuario.EstaLogueado)
+            {
+                await Shell.Current.GoToAsync(
+                    nameof(RequiereCuentaPage));
+
+                return;
+            }
+
+            await Shell.Current.GoToAsync(
+                nameof(ConversacionesPage));
         }
-        private void OnFiltrosClicked(object sender, EventArgs e)
+
+        private async void OnAbrirMisComprasClicked(
+    object sender,
+    EventArgs e)
         {
-            FiltrosLayout.IsVisible = !FiltrosLayout.IsVisible;
+            if (!SesionUsuario.EstaLogueado)
+            {
+                await Shell.Current.GoToAsync(
+                    nameof(RequiereCuentaPage));
+
+                return;
+            }
+
+            await Shell.Current.GoToAsync(
+                nameof(MisComprasPage));
         }
+
+        private async void OnAbrirMisVentasClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (!SesionUsuario.EstaLogueado)
+            {
+                await Shell.Current.GoToAsync(
+                    nameof(RequiereCuentaPage));
+
+                return;
+            }
+
+            await Shell.Current.GoToAsync(
+                nameof(MisVentasPage));
+        }
+
+        public void ActualizarEstadoSesion()
+        {
+            ActualizarSesion();
+            ActualizarBotonConversaciones();
+        }
+
+        private void ActualizarSesion()
+        {
+            MisComprasContenedor.IsVisible = SesionUsuario.EstaLogueado;
+            MisVentasContenedor.IsVisible = SesionUsuario.EstaLogueado;
+            CarritoButton.IsVisible = SesionUsuario.EstaLogueado;
+
+            if (SesionUsuario.EstaLogueado)
+            {
+                var usuario = SesionUsuario.UsuarioActual!;
+
+                SesionButton.Text =
+                    $"👤 {usuario.Nombres} {usuario.Apellidos} - Cerrar sesión";
+
+                PerfilAvatarBorder.IsVisible = true;
+
+                if (!string.IsNullOrWhiteSpace(usuario.UrlFotoPerfil))
+                {
+                    string rutaFoto =
+                        usuario.UrlFotoPerfil.TrimStart('/');
+
+                    string urlFoto =
+                        $"{ApiConfig.BaseUrl.TrimEnd('/')}/{rutaFoto}";
+
+                    if (Uri.TryCreate(
+                        urlFoto,
+                        UriKind.Absolute,
+                        out Uri? uriFoto))
+                    {
+                        PerfilFotoImage.Source = new UriImageSource
+                        {
+                            Uri = uriFoto,
+                            CachingEnabled = false
+                        };
+
+                        PerfilFotoImage.IsVisible = true;
+                        PerfilPlaceholder.IsVisible = false;
+                    }
+                    else
+                    {
+                        MostrarAvatarPredeterminado();
+                    }
+                }
+                else
+                {
+                    MostrarAvatarPredeterminado();
+                }
+            }
+            else
+            {
+                SesionButton.Text = "Iniciar sesión";
+                PerfilAvatarBorder.IsVisible = false;
+
+                MostrarAvatarPredeterminado();
+            }
+        }
+
+        private void MostrarAvatarPredeterminado()
+        {
+            PerfilFotoImage.Source = null;
+            PerfilFotoImage.IsVisible = false;
+            PerfilPlaceholder.IsVisible = true;
+        }
+
+        private async void OnProductoTapped(
+    object sender,
+    TappedEventArgs e)
+        {
+            if (sender is Border border &&
+                border.BindingContext is Producto producto)
+            {
+                _ultimoProductoVisibleId = producto.IdProducto;
+
+                await Shell.Current.GoToAsync(
+                    $"{nameof(ProductoDetallePage)}?idProducto={producto.IdProducto}");
+            }
+        }
+
+        private async void OnFavoritoCorazonClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (sender is not Button button ||
+                button.BindingContext is not Producto producto)
+            {
+                return;
+            }
+
+            if (!SesionUsuario.EstaLogueado)
+            {
+                await Shell.Current.GoToAsync(
+                    nameof(RequiereCuentaPage));
+
+                return;
+            }
+
+            try
+            {
+
+                if (producto.EsFavorito)
+                {
+                    // Buscar el favorito correspondiente para obtener su ID.
+                    string consultaUrl = $"{ApiConfig.BaseUrl}/api/Favoritos";
+
+                    using var consultaResponse =
+                        await Api.EnviarAutenticadoAsync(() =>
+                            new HttpRequestMessage(HttpMethod.Get, consultaUrl));
+
+                    if (!consultaResponse.IsSuccessStatusCode)
+                    {
+                        await DisplayAlertAsync(
+                            "Favoritos",
+                            "No se pudieron consultar tus favoritos.",
+                            "OK");
+                        return;
+                    }
+
+                    string consultaJson =
+                        await consultaResponse.Content.ReadAsStringAsync();
+
+                    var favoritos = JsonSerializer.Deserialize<List<Favorito>>(
+                        consultaJson,
+                        new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+
+                    var favorito = favoritos?.FirstOrDefault(
+                        f => f.IdProducto == producto.IdProducto);
+
+                    if (favorito == null)
+                    {
+                        producto.EsFavorito = false;
+                        return;
+                    }
+
+                    string eliminarUrl =
+                    $"{ApiConfig.BaseUrl}/api/Favoritos/{favorito.IdFavorito}";
+
+                    using var eliminarResponse =
+                        await Api.EnviarAutenticadoAsync(() =>
+                            new HttpRequestMessage(HttpMethod.Delete, eliminarUrl));
+
+                    if (eliminarResponse.IsSuccessStatusCode)
+                    {
+                        producto.EsFavorito = false;
+                        IdsProductosFavoritos.Remove(producto.IdProducto);
+                    }
+                    else
+                    {
+                        await DisplayAlertAsync(
+                            "Favoritos",
+                            "No se pudo quitar el producto de tus favoritos.",
+                            "OK");
+                    }
+                }
+                else
+                {
+                    string agregarUrl = $"{ApiConfig.BaseUrl}/api/Favoritos";
+
+                    var contenidoJson = JsonSerializer.Serialize(new
+                    {
+                        idUsuario = SesionUsuario.UsuarioActual!.IdUsuario,
+                        idProducto = producto.IdProducto
+                    });
+
+                    using var agregarResponse =
+                        await Api.EnviarAutenticadoAsync(() =>
+                            new HttpRequestMessage(HttpMethod.Post, agregarUrl)
+                            {
+                                Content = new StringContent(
+                                    contenidoJson,
+                                    System.Text.Encoding.UTF8,
+                                    "application/json")
+                            });
+
+                    if (agregarResponse.IsSuccessStatusCode)
+                    {
+                        producto.EsFavorito = true;
+                        IdsProductosFavoritos.Add(producto.IdProducto);
+                    }
+                    else if (agregarResponse.StatusCode ==
+                             System.Net.HttpStatusCode.Conflict)
+                    {
+                        // Ya estaba guardado: sincronizar el corazón.
+                        producto.EsFavorito = true;
+                        IdsProductosFavoritos.Add(producto.IdProducto);
+                    }
+                    else
+                    {
+                        string mensaje =
+                            await agregarResponse.Content.ReadAsStringAsync();
+
+                        await DisplayAlertAsync(
+                            "Favoritos",
+                            $"No se pudo agregar el producto a favoritos.\n{mensaje}",
+                            "OK");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlertAsync(
+                    "Error",
+                    $"Ocurrió un problema al actualizar el favorito.\n{ex.Message}",
+                    "OK");
+            }
+        }
+
+        private async void OnCarritoProductoClicked(
+    object sender,
+    EventArgs e)
+        {
+            if (sender is not Button button ||
+                button.BindingContext is not Producto producto)
+            {
+                return;
+            }
+
+            if (!SesionUsuario.EstaLogueado)
+            {
+                await Shell.Current.GoToAsync(
+                    nameof(RequiereCuentaPage));
+
+                return;
+            }
+
+            // Evitar agregar productos propios.
+            if (producto.IdUsuario ==
+                SesionUsuario.UsuarioActual!.IdUsuario)
+            {
+                await DisplayAlertAsync(
+                    "Carrito",
+                    "No puedes agregar tus propios productos al carrito.",
+                    "OK");
+
+                return;
+            }
+
+            // Evitar agregar productos que ya no están disponibles.
+            if (producto.Estado != "Disponible" ||
+                producto.CantidadDisponible <= 0)
+            {
+                await DisplayAlertAsync(
+                    "Carrito",
+                    "Este producto ya no está disponible.",
+                    "OK");
+
+                return;
+            }
+
+            try
+            {
+                if (producto.EstaEnCarrito)
+                {
+                    // Consultar el carrito para obtener el IdCarrito.
+                    string consultaUrl =
+                        $"{ApiConfig.BaseUrl}/api/Carrito";
+
+                    using var consultaResponse =
+                        await Api.EnviarAutenticadoAsync(() =>
+                            new HttpRequestMessage(
+                                HttpMethod.Get,
+                                consultaUrl));
+
+                    if (!consultaResponse.IsSuccessStatusCode)
+                    {
+                        await DisplayAlertAsync(
+                            "Carrito",
+                            "No se pudo consultar tu carrito.",
+                            "OK");
+
+                        return;
+                    }
+
+                    string consultaJson =
+                        await consultaResponse.Content.ReadAsStringAsync();
+
+                    var productosCarrito =
+                        JsonSerializer.Deserialize<List<CarritoItem>>(
+                            consultaJson,
+                            new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+
+                    var registro = productosCarrito?.FirstOrDefault(
+                        p => p.IdProducto == producto.IdProducto);
+
+                    if (registro == null)
+                    {
+                        producto.EstaEnCarrito = false;
+                        IdsProductosCarrito.Remove(producto.IdProducto);
+                        return;
+                    }
+
+                    // Quitar el producto del carrito.
+                    string eliminarUrl =
+                        $"{ApiConfig.BaseUrl}/api/Carrito/{registro.IdCarrito}";
+
+                    using var eliminarResponse =
+                        await Api.EnviarAutenticadoAsync(() =>
+                            new HttpRequestMessage(
+                                HttpMethod.Delete,
+                                eliminarUrl));
+
+                    if (eliminarResponse.IsSuccessStatusCode)
+                    {
+                        producto.EstaEnCarrito = false;
+                        IdsProductosCarrito.Remove(producto.IdProducto);
+                    }
+                    else
+                    {
+                        await DisplayAlertAsync(
+                            "Carrito",
+                            "No se pudo quitar el producto de tu carrito.",
+                            "OK");
+                    }
+                }
+                else
+                {
+                    // Agregar el producto al carrito.
+                    string agregarUrl =
+                        $"{ApiConfig.BaseUrl}/api/Carrito";
+
+                    var contenidoJson = JsonSerializer.Serialize(new
+                    {
+                        idProducto = producto.IdProducto,
+                        cantidad = 1
+                    });
+
+                    using var agregarResponse =
+                        await Api.EnviarAutenticadoAsync(() =>
+                            new HttpRequestMessage(
+                                HttpMethod.Post,
+                                agregarUrl)
+                            {
+                                Content = new StringContent(
+                                    contenidoJson,
+                                    System.Text.Encoding.UTF8,
+                                    "application/json")
+                            });
+
+                    if (agregarResponse.IsSuccessStatusCode)
+                    {
+                        producto.EstaEnCarrito = true;
+                        IdsProductosCarrito.Add(producto.IdProducto);
+                    }
+                    else
+                    {
+                        string mensaje =
+                            await agregarResponse.Content.ReadAsStringAsync();
+
+                        await DisplayAlertAsync(
+                            "Carrito",
+                            $"No se pudo agregar el producto al carrito.\n{mensaje}",
+                            "OK");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlertAsync(
+                    "Error",
+                    $"Ocurrió un problema al actualizar el carrito.\n{ex.Message}",
+                    "OK");
+            }
+        }
+
         private async void OnPerfilAvatarTapped(
             object sender,
             TappedEventArgs e)
@@ -639,29 +944,13 @@ namespace MarketplaceUAT.App.Pages
                 return;
             }
 
-            await Shell.Current.GoToAsync(nameof(PerfilPage));
+            await Shell.Current.GoToAsync(
+                nameof(PerfilPage));
         }
 
-        private async void OnPerfilClicked(object sender, EventArgs e)
+        private async void OnAbrirCarritoClicked(object sender, EventArgs e)
         {
-            if (!SesionUsuario.EstaLogueado)
-            {
-                bool irALogin = await DisplayAlertAsync(
-                    "Iniciar sesión",
-                    "Necesitas iniciar sesión para consultar tu perfil.",
-                    "Iniciar sesión",
-                    "Cancelar");
-
-                if (irALogin)
-                {
-                    await Shell.Current.GoToAsync(nameof(LoginPage));
-                }
-
-                return;
-            }
-
-            await Shell.Current.GoToAsync(nameof(PerfilPage));
+            await Shell.Current.GoToAsync(nameof(CarritoPage));
         }
     }
 }
-

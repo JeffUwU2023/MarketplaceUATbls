@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MarketplaceUAT.App.Pages.ConversacionesPublicacionPage"
+             Title="Conversaciones de la publicación">
+
+    <Grid RowDefinitions="Auto,*"
+          Padding="15"
+          RowSpacing="12">
+
+        <Entry
+            x:Name="BuscarUsuarioEntry"
+            Grid.Row="0"
+            Placeholder="Buscar por nombre de usuario..."
+            ClearButtonVisibility="WhileEditing"
+            TextChanged="OnBuscarUsuarioTextChanged" />
+
+        <CollectionView
+            x:Name="ConversacionesCollectionView"
+            Grid.Row="1"
+            SelectionMode="Single"
+            SelectionChanged="OnConversacionSeleccionada">
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border
+                        Padding="15"
+                        Margin="0,5"
+                        StrokeShape="RoundRectangle 10">
+
+                        <VerticalStackLayout Spacing="5">
+
+                            <Label
+                                Text="{Binding NombreOtroUsuario}"
+                                FontSize="18"
+                                FontAttributes="Bold" />
+
+                            <Label
+                                Text="{Binding NombreProducto}"
+                                FontSize="14"
+                                Opacity="0.7" />
+
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+            <CollectionView.EmptyView>
+                <VerticalStackLayout
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center"
+                    Spacing="10">
+
+                    <Label
+                        Text="💬"
+                        FontSize="45"
+                        HorizontalOptions="Center" />
+
+                    <Label
+                        Text="No hay conversaciones para mostrar."
+                        FontSize="16"
+                        HorizontalTextAlignment="Center"
+                        HorizontalOptions="Center" />
+
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
+        </CollectionView>
+
+    </Grid>
+
+</ContentPage>

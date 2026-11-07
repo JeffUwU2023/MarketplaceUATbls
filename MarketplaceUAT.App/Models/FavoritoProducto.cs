@@ -1,5 +1,4 @@
-﻿
-namespace MarketplaceUAT.App.Models
+﻿namespace MarketplaceUAT.App.Models
 {
     public class FavoritoProducto
     {
@@ -16,6 +15,10 @@ namespace MarketplaceUAT.App.Models
         public string Condicion { get; set; } = string.Empty;
 
         public string Estado { get; set; } = string.Empty;
+
+        public bool Activo { get; set; }
+
+        public bool NoDisponible => !Activo || Estado == "Vendido";
 
         public string? ImagenUrl { get; set; }
     }

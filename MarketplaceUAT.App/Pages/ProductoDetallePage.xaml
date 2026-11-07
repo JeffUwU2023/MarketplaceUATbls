@@ -7,20 +7,23 @@
     <ScrollView>
         <VerticalStackLayout
             Padding="20"
-            Spacing="20">
+            Spacing="12">
 
             <CarouselView
-            x:Name="ImagenesCarousel"
-            HeightRequest="250"
-            ItemsSource="{Binding ImagenesProducto}"
-            IndicatorView="IndicadorImagenes">
+                x:Name="ImagenesCarousel"
+                HeightRequest="250"
+                ItemsSource="{Binding ImagenesProducto}"
+                IndicatorView="IndicadorImagenes"
+                HorizontalOptions="Fill">
 
                 <CarouselView.ItemTemplate>
                     <DataTemplate>
                         <Image
                 Source="{Binding}"
                 HeightRequest="250"
-                Aspect="AspectFit" />
+                Aspect="AspectFit"
+                HorizontalOptions="Fill"
+                VerticalOptions="Center" />
                     </DataTemplate>
                 </CarouselView.ItemTemplate>
 
@@ -58,9 +61,76 @@
                 x:Name="CondicionProductoLabel"
                 FontSize="18" />
 
+
             <Label
-                x:Name="EstadoProductoLabel"
-                FontSize="18" />
+    x:Name="EstadoProductoLabel"
+    FontSize="18" />
+
+            <Label
+    x:Name="CantidadDisponibleLabel"
+    FontSize="18"
+    TextColor="#218838"
+    IsVisible="False" />
+
+            <!-- Selector de cantidad para productos con varias unidades -->
+            <VerticalStackLayout
+    x:Name="SelectorCantidadLayout"
+    Spacing="6"
+    IsVisible="False">
+
+                <Label
+        Text="Cantidad"
+        FontSize="18"
+        FontAttributes="Bold" />
+
+                <HorizontalStackLayout
+        Spacing="12"
+        VerticalOptions="Center">
+
+                    <Button
+            x:Name="DisminuirCantidadButton"
+            Text="−"
+            WidthRequest="48"
+            HeightRequest="44"
+            Clicked="OnDisminuirCantidadClicked" />
+
+                    <Label
+            x:Name="CantidadSeleccionadaLabel"
+            Text="1"
+            FontSize="20"
+            FontAttributes="Bold"
+            VerticalTextAlignment="Center"
+            HorizontalTextAlignment="Center"
+            WidthRequest="40" />
+
+                    <Button
+            x:Name="AumentarCantidadButton"
+            Text="+"
+            WidthRequest="48"
+            HeightRequest="44"
+            Clicked="OnAumentarCantidadClicked" />
+
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+
+            <Button
+    x:Name="AgregarCarritoButton"
+    Text="🛒 Agregar al carrito"
+    Margin="0,5,0,0"
+    BackgroundColor="#218838"
+    TextColor="White"
+    CornerRadius="10"
+    IsVisible="False"
+    Clicked="OnAgregarCarritoClicked" />
+
+            <Label
+    x:Name="NoDisponibleLabel"
+    Text="⚠️ No disponible"
+    FontSize="18"
+    FontAttributes="Bold"
+    TextColor="Red"
+    IsVisible="False" />
+
 
             <Label
                 x:Name="CategoriaProductoLabel"
@@ -87,12 +157,17 @@
                 FontSize="18" />
 
             <Label
-                x:Name="MatriculaVendedorLabel"
-                FontSize="17" />
-
-            <Label
                 x:Name="CorreoVendedorLabel"
                 FontSize="17" />
+
+            <Button
+                x:Name="VerPerfilVendedorButton"
+                Text="👤 Ver perfil"
+                Margin="0,5,0,0"
+                BackgroundColor="#2457C5"
+                TextColor="White"
+                CornerRadius="10"
+                Clicked="OnVerPerfilVendedorClicked" />
 
             <Button
                 x:Name="AccionProductoButton"
@@ -101,10 +176,78 @@
                 Clicked="OnAccionProductoClicked" />
 
             <Button
+                x:Name="EditarPublicacionButton"
+                Text="✏️ Editar publicación"
+                Margin="0,5,0,0"
+                BackgroundColor="#2457C5"
+                TextColor="White"
+                CornerRadius="10"
+                IsVisible="False"
+                Clicked="OnEditarPublicacionClicked" />
+
+            <Button
+                x:Name="BorrarPublicacionButton"
+                Text="🗑 Borrar publicación"
+                Margin="0,5,0,0"
+                BackgroundColor="#B42318"
+                TextColor="White"
+                CornerRadius="10"
+                IsVisible="False"
+                Clicked="OnBorrarPublicacionClicked" />
+
+            <Button
+                x:Name="VolverPublicarButton"
+                Text="📢 Volver a publicar"
+                Margin="0,5,0,0"
+                BackgroundColor="#2457C5"
+                TextColor="White"
+                CornerRadius="10"
+                IsVisible="False"
+                Clicked="OnVolverPublicarClicked" />
+
+            <Button
+                x:Name="ReactivarPublicacionButton"
+                Text="🔄 Reactivar publicación"
+                Margin="0,5,0,0"
+                BackgroundColor="#218838"
+                TextColor="White"
+                CornerRadius="10"
+                IsVisible="False"
+                Clicked="OnReactivarPublicacionClicked" />
+            
+            <Button
+                x:Name="MarcarDisponibleButton"
+                Text="↩ Volver a marcar como disponible"
+                Margin="0,5,0,0"
+                BackgroundColor="#218838"
+                TextColor="White"
+                CornerRadius="10"
+                IsVisible="False"
+                Clicked="OnMarcarDisponibleClicked" />
+
+            <Button
+                x:Name="RegistrarVentaButton"
+                Text="💰 Registrar venta"
+                Margin="0,5,0,0"
+                BackgroundColor="#2457C5"
+                TextColor="White"
+                CornerRadius="10"
+                IsVisible="False"
+                Clicked="OnRegistrarVentaClicked" />
+
+            <Button
                 x:Name="FavoritoButton"
                 Text="♡ Agregar a favoritos"
                 Margin="0,10,0,0"
                 Clicked="OnAgregarFavoritoClicked" />
+
+            <Button
+                x:Name="ConversacionesPublicacionButton"
+                Text="💬 Conversaciones de la publicación"
+                Margin="0,10,0,0"
+                IsVisible="False"
+                Clicked="OnConversacionesPublicacionClicked" />
+
         </VerticalStackLayout>
     </ScrollView>
 

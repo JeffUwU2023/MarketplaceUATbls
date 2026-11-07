@@ -52,14 +52,17 @@
                 <DataTemplate>
 
                     <Border
-            Padding="15"
-            Margin="0,5"
-            StrokeShape="RoundRectangle 10">
+    Padding="15"
+    Margin="0,5"
+    StrokeShape="RoundRectangle 10">
 
-                        <VerticalStackLayout
-                Spacing="5">
+                        <Grid>
 
-                            <Label
+                            <VerticalStackLayout
+            Spacing="5"
+            Padding="0,0,30,0">
+
+                                <Label
                     Text="{Binding NombreProducto}"
                     FontSize="18"
                     FontAttributes="Bold" />
@@ -79,6 +82,32 @@
                     Opacity="0.6" />
 
                         </VerticalStackLayout>
+
+                            <!-- Insignia de mensajes sin leer -->
+                            <Border
+            WidthRequest="26"
+            HeightRequest="26"
+            BackgroundColor="#E53935"
+            Stroke="#FFFFFF"
+            StrokeThickness="1"
+            StrokeShape="RoundRectangle 13"
+            HorizontalOptions="End"
+            VerticalOptions="Start"
+            ZIndex="1"
+            InputTransparent="True"
+            IsVisible="{Binding TieneMensajesSinLeer}">
+
+                                <Label
+                Text="{Binding MensajesSinLeer}"
+                FontSize="12"
+                FontAttributes="Bold"
+                TextColor="White"
+                HorizontalTextAlignment="Center"
+                VerticalTextAlignment="Center" />
+
+                            </Border>
+
+                        </Grid>
 
                     </Border>
 

@@ -11,6 +11,11 @@ namespace MarketplaceUAT.App.Pages
             InitializeComponent();
         }
 
+        protected override bool OnBackButtonPressed()
+        {
+            return true;
+        }
+
         private void OnLimpiarCorreoClicked(object sender, EventArgs e)
         {
             CorreoEntry.Text = string.Empty;
@@ -90,20 +95,22 @@ namespace MarketplaceUAT.App.Pages
                     await response.Content.ReadFromJsonAsync<LoginResponse>();
 
                 if (loginResponse == null ||
-                    loginResponse.Usuario == null ||
-                    string.IsNullOrWhiteSpace(loginResponse.Token))
+    loginResponse.Usuario == null ||
+    string.IsNullOrWhiteSpace(loginResponse.Token) ||
+    string.IsNullOrWhiteSpace(loginResponse.RefreshToken))
                 {
                     await DisplayAlertAsync(
                         "Error",
-                        "No se pudieron obtener los datos del usuario.",
+                        "No se pudieron obtener los datos de autenticación. Intenta iniciar sesión nuevamente.",
                         "OK");
 
                     return;
                 }
 
-                SesionUsuario.IniciarSesion(
-                    loginResponse.Usuario,
-                    loginResponse.Token);
+                await SesionUsuario.IniciarSesionAsync(
+                      loginResponse.Usuario,
+                      loginResponse.Token,
+                      loginResponse.RefreshToken);
 
                 await DisplayAlertAsync(
                     "Bienvenido",

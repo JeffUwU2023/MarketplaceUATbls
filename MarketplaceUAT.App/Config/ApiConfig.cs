@@ -2,6 +2,6 @@
 {
     public static class ApiConfig
     {
-        public const string BaseUrl = "http://192.168.100.4:5190";
+        public const string BaseUrl = "https://helping-reception-arrangement-saves.trycloudflare.com";
     }
 }

@@ -20,8 +20,11 @@ namespace MarketplaceUAT.API.DTOs
         [EmailAddress(ErrorMessage = "El correo no tiene un formato válido.")]
         public string Correo { get; set; } = string.Empty;
 
-        [StringLength(20, MinimumLength = 8,
-            ErrorMessage = "La contraseña debe tener entre 8 y 20 caracteres.")]
-        public string? Password { get; set; }
+        [RegularExpression(
+    @"^$|^.{8,128}$",
+    ErrorMessage = "La contraseña debe estar vacía o tener entre 8 y 128 caracteres.")]
+        public string Password { get; set; } = string.Empty;
+
+        public string PasswordActual { get; set; } = string.Empty;
     }
 }

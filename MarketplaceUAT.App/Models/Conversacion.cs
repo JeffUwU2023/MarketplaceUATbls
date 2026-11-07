@@ -20,5 +20,9 @@
         public bool Archivada { get; set; }
 
         public bool Activa { get; set; }
+
+        public int MensajesSinLeer { get; set; }
+
+        public bool TieneMensajesSinLeer => MensajesSinLeer > 0;
     }
 }

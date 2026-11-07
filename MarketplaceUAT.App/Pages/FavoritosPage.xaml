@@ -79,6 +79,12 @@
                                 <Label
                                     Text="{Binding Estado}" />
 
+                                <Label
+                                    Text="No disponible"
+                                    TextColor="Red"
+                                    FontAttributes="Bold"
+                                    IsVisible="{Binding NoDisponible}" />
+                                
                                 <Button
                                     Text="🗑 Eliminar de favoritos"
                                     Clicked="OnEliminarFavoritoClicked"

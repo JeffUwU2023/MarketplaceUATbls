@@ -1,10 +1,15 @@
-﻿namespace MarketplaceUAT.App.Models
+﻿using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
+namespace MarketplaceUAT.App.Models
 {
-    public class Producto
+    public class Producto : INotifyPropertyChanged
     {
         public int IdProducto { get; set; }
         public int IdUsuario { get; set; }
         public int IdCategoria { get; set; }
+        public bool EsProductoUnico { get; set; } = true;
+        public int CantidadDisponible { get; set; } = 1;
         public string Nombre { get; set; } = string.Empty;
         public string? Descripcion { get; set; }
         public decimal Precio { get; set; }
@@ -109,5 +114,46 @@
         public bool Activo { get; set; }
 
         public string? ImagenUrl { get; set; }
+
+        private bool _esFavorito;
+
+        public bool EsFavorito
+        {
+            get => _esFavorito;
+            set
+            {
+                if (_esFavorito == value)
+                    return;
+
+                _esFavorito = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private bool _estaEnCarrito;
+
+        public bool EstaEnCarrito
+        {
+            get => _estaEnCarrito;
+            set
+            {
+                if (_estaEnCarrito == value)
+                    return;
+
+                _estaEnCarrito = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged(
+            [CallerMemberName] string? nombrePropiedad = null)
+        {
+            PropertyChanged?.Invoke(
+                this,
+                new PropertyChangedEventArgs(nombrePropiedad));
+        }
     }
 }
+

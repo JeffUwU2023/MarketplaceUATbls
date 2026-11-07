@@ -61,6 +61,38 @@
                     CornerRadius="10"
                     IsVisible="False" />
 
+                <Grid
+                    ColumnDefinitions="*,*"
+                    ColumnSpacing="12"
+                    Margin="0,8,0,4">
+
+
+                    <Button
+                        Grid.Column="0"
+                        Text="🛍️ Mis compras"
+                        Clicked="OnMisComprasClicked"
+                        BackgroundColor="#E8EDF8"
+                        TextColor="#2457C5"
+                        CornerRadius="10"
+                        HeightRequest="48"
+                        FontSize="12"
+                        Padding="2,0"
+                        LineBreakMode="NoWrap"
+                        MinimumWidthRequest="0" />
+
+
+                    <Button
+                        Grid.Column="1"
+                        Text="📦 Mis ventas"
+                        Clicked="OnMisVentasClicked"
+                        BackgroundColor="#E8EDF8"
+                        TextColor="#2457C5"
+                        CornerRadius="10"
+                        HeightRequest="48"
+                        FontSize="13" />
+
+                </Grid>
+
                 <Label
                     Text="Mi perfil"
                     FontSize="26"
@@ -157,6 +189,12 @@
                         FontAttributes="Bold" />
 
                     <Entry
+                        x:Name="PasswordActualEntry"
+                        Placeholder="Contraseña actual"
+                        IsPassword="True"
+                        MaxLength="128" />
+
+                    <Entry
                         x:Name="PasswordEntry"
                         Placeholder="Nueva contraseña (8 a 20 caracteres)"
                         IsPassword="True"
@@ -177,7 +215,7 @@
                         HeightRequest="48" />
 
                     <Label
-                        Text="Deja ambos campos vacíos si no deseas cambiar la contraseña."
+                        Text="Para cambiar tu contraseña, introduce la actual y escribe dos veces la nueva."
                         FontSize="12"
                         TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}" />
 

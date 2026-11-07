@@ -1,9 +1,13 @@
 using MarketplaceUAT.App.Config;
 using MarketplaceUAT.App.Models;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Text.Json;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using MarketplaceUAT.App.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MarketplaceUAT.App.Pages
 {
@@ -12,408 +16,725 @@ namespace MarketplaceUAT.App.Pages
     [QueryProperty(nameof(IdUsuarioVendedor), "idUsuarioVendedor")]
     public partial class ChatPage : ContentPage
     {
-        private ObservableCollection<Mensaje> mensajesActuales = new();
-        private string idConversacion = string.Empty;
-        private string idProducto = string.Empty;
-        private string idUsuarioVendedor = string.Empty;
-        private bool omitirCargaAutomatica = false;
-        private bool EsCargaInicial = true;
-        private bool EstaAlFinal = true;
-        private int? mensajeSeleccionadoId;
-        private readonly Command<Mensaje> mostrarAccionesCommand;
-        public Command<Mensaje> MostrarAccionesCommand =>
-        mostrarAccionesCommand;
+        private ApiClient Api =>
+    Application.Current!.Handler.MauiContext!.Services
+        .GetRequiredService<ApiClient>();
+        private readonly ObservableCollection<Mensaje> _mensajes = new();
+        private readonly ObservableCollection<FileResult> _imagenesSeleccionadas = new();
+        private Guid? _idSolicitudPendiente;
+        private int? _idConversacionSolicitudPendiente;
+        private CancellationTokenSource? _cargaCts;
+        private bool _inicializando;
+        private bool _conversacionArchivada;
+        private bool _conversacionVerificada;
+        private bool _estaAlFinal = true;
+        private string? _urlFotoUsuarioActual;
+        private string? _urlFotoOtroUsuario;
+        private int? _mensajeSeleccionadoId;
+        public Command<Mensaje> MostrarAccionesCommand { get; private set; }
+        private string _idConversacion = string.Empty;
+        private string _idProducto = string.Empty;
+        private string _idUsuarioVendedor = string.Empty;
 
-        public string IdProducto
+        private static readonly JsonSerializerOptions OpcionesJson = new()
         {
-            get => idProducto;
-            set => idProducto = value;
-        }
-
-        public string IdUsuarioVendedor
-        {
-            get => idUsuarioVendedor;
-            set => idUsuarioVendedor = value;
-        }
-        private readonly List<FileResult> imagenesSeleccionadas = [];
-
-        private readonly HttpClient clienteSubidaImagen = new HttpClient(
-        new SocketsHttpHandler
-        {
-            Proxy = null,
-            UseProxy = false
-        })
-        {
-            Timeout = TimeSpan.FromSeconds(30)
-        };
-
-        private readonly HttpClient clienteConversacion = new HttpClient(
-        new SocketsHttpHandler
-        {
-            Proxy = null,
-            UseProxy = false
-        })
-        {
-            Timeout = TimeSpan.FromSeconds(10)
+            PropertyNameCaseInsensitive = true
         };
 
         public string IdConversacion
         {
-            get => idConversacion;
-            set
-            {
-                idConversacion = value;
+            get => _idConversacion;
+            set => _idConversacion = value ?? string.Empty;
+        }
 
-                if (!omitirCargaAutomatica)
-                {
-                    _ = CargarConversacionAsync();
-                }
-            }
+        public string IdProducto
+        {
+            get => _idProducto;
+            set => _idProducto = value ?? string.Empty;
+        }
+
+        public string IdUsuarioVendedor
+        {
+            get => _idUsuarioVendedor;
+            set => _idUsuarioVendedor = value ?? string.Empty;
         }
 
         public ChatPage()
         {
-            mostrarAccionesCommand =
-                new Command<Mensaje>(MostrarAccionesMensaje);
-
             InitializeComponent();
 
-            ImagenesPreviewCollectionView.ItemsSource =
-                imagenesSeleccionadas;
+            MostrarAccionesCommand = new Command<Mensaje>(async mensaje =>
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (mensaje == null ||
+                        !mensaje.EsMio ||
+                        _conversacionArchivada)
+                    {
+                        return;
+                    }
+
+                    // Comprobar si se volvió a pulsar el mismo mensaje.
+                    bool ocultar =
+                        _mensajeSeleccionadoId == mensaje.IdMensaje &&
+                        mensaje.MostrarAcciones;
+
+                    // Ocultar las opciones de todos los mensajes.
+                    foreach (var item in _mensajes)
+                    {
+                        item.MostrarAcciones = false;
+                    }
+
+                    if (ocultar)
+                    {
+                        // Segunda pulsación: ocultar las opciones.
+                        _mensajeSeleccionadoId = null;
+                    }
+                    else
+                    {
+                        // Primera pulsación: mostrar las opciones.
+                        mensaje.MostrarAcciones = true;
+                        _mensajeSeleccionadoId = mensaje.IdMensaje;
+                    }
+                });
+            });
+
+            MensajesCollectionView.ItemsSource = _mensajes;
+            ImagenesPreviewCollectionView.ItemsSource = _imagenesSeleccionadas;
         }
 
-        private async Task CargarConversacionAsync()
+        protected override async void OnAppearing()
+        {
+            base.OnAppearing();
+
+            if (_inicializando)
+                return;
+
+            _inicializando = true;
+
+            _cargaCts?.Cancel();
+            _cargaCts?.Dispose();
+            _cargaCts = new CancellationTokenSource();
+
+            try
+            {
+                await InicializarChatAsync(_cargaCts.Token);
+            }
+            finally
+            {
+                _inicializando = false;
+            }
+        }
+
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+
+            _cargaCts?.Cancel();
+
+            _imagenesSeleccionadas.Clear();
+            ImagenPreviewBorder.IsVisible = false;
+        }
+
+        private string CrearUrl(string ruta)
+        {
+            return $"{ApiConfig.BaseUrl.TrimEnd('/')}/{ruta.TrimStart('/')}";
+        }
+
+        private async Task InicializarChatAsync(
+            CancellationToken cancellationToken)
         {
             try
             {
+                IndicadorCarga.IsVisible = true;
+                IndicadorCarga.IsRunning = true;
                 CargandoMensajesLabel.IsVisible = true;
 
-                if (string.IsNullOrWhiteSpace(IdConversacion))
+                if (!SesionUsuario.EstaLogueado)
                 {
-                    MensajesCollectionView.ItemsSource = new List<Mensaje>();
-                    CargandoMensajesLabel.IsVisible = false;
+                    await DisplayAlertAsync(
+                        "Cuenta requerida",
+                        "Debes iniciar sesión para utilizar el chat.",
+                        "OK");
+
+                    await Shell.Current.GoToAsync("..");
                     return;
                 }
 
-                clienteConversacion.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue(
-               "Bearer",
-                SesionUsuario.Token);
+                _conversacionArchivada = false;
+                _conversacionVerificada = false;
 
-                string url =
-                    $"{ApiConfig.BaseUrl}/api/Mensajes/Conversacion/{IdConversacion}";
+                ConversacionArchivadaBorder.IsVisible = false;
+                AreaEnvioGrid.IsVisible = true;
+                ImagenPreviewBorder.IsVisible = false;
 
-                var cronometro = System.Diagnostics.Stopwatch.StartNew();
-                var response = await clienteConversacion.GetAsync(url);
-                cronometro.Stop();
+                if (int.TryParse(IdConversacion, out int idExistente) &&
+                    idExistente > 0)
+                {
+                    bool encontrada =
+                        await CargarDatosConversacionAsync(idExistente);
 
-                System.Diagnostics.Debug.WriteLine(
-                    $"[CHAT] Respuesta de la API: {cronometro.ElapsedMilliseconds} ms");
+                    if (!encontrada)
+                    {
+                        _conversacionArchivada = true;
+                        ConfigurarModoArchivado();
 
-                if (!response.IsSuccessStatusCode)
+                        await DisplayAlertAsync(
+                            "Conversación no disponible",
+                            "No se pudo verificar el estado de esta conversación. " +
+                            "Por seguridad, el envío permanecerá deshabilitado.",
+                            "OK");
+
+                        return;
+                    }
+
+                    await CargarMensajesAsync(cancellationToken);
+                    return;
+                }
+
+                if (!int.TryParse(IdProducto, out int idProducto) ||
+                    idProducto <= 0)
                 {
                     await DisplayAlertAsync(
                         "Error",
-                        $"No se pudieron obtener los mensajes.\nCódigo: {(int)response.StatusCode}",
+                        "No se recibió un identificador válido de conversación o producto.",
                         "OK");
 
                     return;
                 }
 
-                string json = await response.Content.ReadAsStringAsync();
+                TituloChatLabel.Text = "Nueva conversación";
+                SubtituloChatLabel.Text = "Contactar al vendedor";
+
+                string urlProducto =
+                    CrearUrl($"api/Conversaciones/Producto/{idProducto}");
+
+                using var respuestaProducto =
+    await Api.EnviarAutenticadoAsync(
+        () => new HttpRequestMessage(
+            HttpMethod.Get,
+            urlProducto),
+        cancellationToken);
+
+                if (respuestaProducto.StatusCode ==
+                    System.Net.HttpStatusCode.NoContent)
+                {
+
+                }
+                else if (respuestaProducto.IsSuccessStatusCode)
+                {
+                    string json =
+                        await respuestaProducto.Content.ReadAsStringAsync();
+
+                    var conversacion =
+                        JsonSerializer.Deserialize<Conversacion>(
+                            json,
+                            OpcionesJson);
+
+                    if (conversacion == null ||
+                        conversacion.IdConversacion <= 0)
+                    {
+                        await DisplayAlertAsync(
+                            "Respuesta inválida",
+                            "La API respondió correctamente, pero no devolvió " +
+                            "una conversación válida.",
+                            "OK");
+
+                        return;
+                    }
+
+                    IdConversacion =
+                        conversacion.IdConversacion.ToString();
+
+                    bool encontrada =
+                        await CargarDatosConversacionAsync(
+                            conversacion.IdConversacion);
+
+                    if (!encontrada)
+                    {
+                        _conversacionArchivada = true;
+                        ConfigurarModoArchivado();
+
+                        await DisplayAlertAsync(
+                            "Aviso",
+                            "No se pudo verificar el estado de la conversación.",
+                            "OK");
+
+                        return;
+                    }
+
+                    await CargarMensajesAsync(cancellationToken);
+                    return;
+                }
+                else
+                {
+                    string error =
+                        await respuestaProducto.Content.ReadAsStringAsync();
+
+                    await DisplayAlertAsync(
+                        "Error",
+                        "No se pudo consultar la conversación existente.\n\n" +
+                        $"Código HTTP: {(int)respuestaProducto.StatusCode}\n{error}",
+                        "OK");
+
+                    return;
+                }
+
+                IdConversacion = string.Empty;
+                _conversacionVerificada = true;
+
+                _mensajes.Clear();
+                MensajesCollectionView.ItemsSource = _mensajes;
+
+                ConfigurarModoActivo();
+            }
+            catch (OperationCanceledException)
+            {
+
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlertAsync(
+                    "Error de conexión",
+                    $"No se pudo inicializar el chat.\n\n{ex.Message}",
+                    "OK");
+            }
+            finally
+            {
+                IndicadorCarga.IsRunning = false;
+                IndicadorCarga.IsVisible = false;
+                CargandoMensajesLabel.IsVisible = false;
+            }
+        }
+
+        private async Task<bool> CargarDatosConversacionAsync(
+            int idConversacion)
+        {
+            try
+            {
+                string url = CrearUrl(
+                    $"api/Conversaciones/{idConversacion}");
+
+                using var respuesta =
+    await Api.EnviarAutenticadoAsync(
+        () => new HttpRequestMessage(
+            HttpMethod.Get,
+            url));
+
+                if (!respuesta.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"Error al consultar conversación: HTTP {(int)respuesta.StatusCode}");
+
+                    return false;
+                }
+
+                string json = await respuesta.Content.ReadAsStringAsync();
+
+                var conversacion =
+                    JsonSerializer.Deserialize<Conversacion>(
+                        json,
+                        OpcionesJson);
+
+                if (conversacion == null ||
+                    conversacion.IdConversacion != idConversacion)
+                {
+                    return false;
+                }
+
+                IdConversacion = conversacion.IdConversacion.ToString();
+
+                TituloChatLabel.Text =
+                    string.IsNullOrWhiteSpace(conversacion.NombreProducto)
+                        ? "Conversación"
+                        : conversacion.NombreProducto;
+
+                SubtituloChatLabel.Text =
+                    string.IsNullOrWhiteSpace(conversacion.NombreOtroUsuario)
+                        ? "Chat de Marketplace"
+                        : $"Con {conversacion.NombreOtroUsuario}";
+
+                _conversacionArchivada =
+                    conversacion.Archivada || !conversacion.Activa;
+
+                int idUsuarioActual =
+    SesionUsuario.UsuarioActual?.IdUsuario ?? 0;
+
+                int idOtroUsuario;
+
+                if (idUsuarioActual == conversacion.IdUsuarioComprador)
+                {
+                    idOtroUsuario = conversacion.IdUsuarioVendedor;
+                }
+                else if (idUsuarioActual == conversacion.IdUsuarioVendedor)
+                {
+                    idOtroUsuario = conversacion.IdUsuarioComprador;
+                }
+                else
+                {
+                    _conversacionVerificada = false;
+                    return false;
+                }
+
+                _conversacionVerificada = true;
+
+                _urlFotoUsuarioActual =
+                    await ObtenerFotoPerfilAsync(idUsuarioActual);
+
+                _urlFotoOtroUsuario =
+                    await ObtenerFotoPerfilAsync(idOtroUsuario);
+
+                if (_conversacionArchivada)
+                    ConfigurarModoArchivado();
+                else
+                    ConfigurarModoActivo();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Error al cargar datos de la conversación: {ex.Message}");
+
+                return false;
+            }
+        }
+
+        private void ConfigurarModoArchivado()
+        {
+            _conversacionArchivada = true;
+
+            ConversacionArchivadaBorder.IsVisible = true;
+            EliminarConversacionButton.IsVisible =
+                _conversacionVerificada &&
+                int.TryParse(IdConversacion, out int id) &&
+                id > 0;
+
+            AreaEnvioGrid.IsVisible = false;
+            ImagenPreviewBorder.IsVisible = false;
+
+            _imagenesSeleccionadas.Clear();
+
+            foreach (var mensaje in _mensajes)
+            {
+                mensaje.MostrarAcciones = false;
+            }
+        }
+
+        private void ConfigurarModoActivo()
+        {
+            _conversacionArchivada = false;
+
+            ConversacionArchivadaBorder.IsVisible = false;
+            EliminarConversacionButton.IsVisible = false;
+
+            AreaEnvioGrid.IsVisible = true;
+
+            SeleccionarImagenButton.IsEnabled = true;
+            MensajeEntry.IsEnabled = true;
+            EnviarMensajeButton.IsEnabled = true;
+        }
+
+        private async Task CargarMensajesAsync(
+            CancellationToken cancellationToken)
+        {
+            if (!int.TryParse(IdConversacion, out int idConversacion) ||
+                idConversacion <= 0)
+            {
+                return;
+            }
+
+            try
+            {
+                CargandoMensajesLabel.IsVisible = true;
+
+                string url =
+                    CrearUrl($"api/Mensajes/Conversacion/{idConversacion}");
+
+                using var respuesta =
+    await Api.EnviarAutenticadoAsync(
+        () => new HttpRequestMessage(
+            HttpMethod.Get,
+            url),
+        cancellationToken);
+
+                if (!respuesta.IsSuccessStatusCode)
+                {
+                    string error =
+                        await respuesta.Content.ReadAsStringAsync();
+
+                    await DisplayAlertAsync(
+                        "Error",
+                        "No se pudieron cargar los mensajes.\n\n" +
+                        $"Código HTTP: {(int)respuesta.StatusCode}\n{error}",
+                        "OK");
+
+                    return;
+                }
+
+                string json =
+                    await respuesta.Content.ReadAsStringAsync();
 
                 var mensajes = JsonSerializer.Deserialize<List<Mensaje>>(
-                json,
-                new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                System.Diagnostics.Debug.WriteLine(
-    $"[CHAT] Mensajes recibidos: {mensajes?.Count ?? 0}");
+                    json,
+                    OpcionesJson);
 
                 if (mensajes == null)
                 {
+                    await DisplayAlertAsync(
+                        "Error",
+                        "La API no devolvió una lista válida de mensajes.",
+                        "OK");
+
                     return;
                 }
 
                 int idUsuarioActual =
                     SesionUsuario.UsuarioActual?.IdUsuario ?? 0;
 
-                foreach (var mensaje in mensajes)
+                _mensajes.Clear();
+
+                foreach (var mensaje in mensajes.OrderBy(m => m.FechaEnvio))
                 {
-                    mensaje.EsMio =
-                        mensaje.IdUsuario == idUsuarioActual;
+                    mensaje.EsMio = mensaje.IdUsuario == idUsuarioActual;
+                    mensaje.UrlFotoPerfil = mensaje.EsMio
+                          ? _urlFotoUsuarioActual
+                          : _urlFotoOtroUsuario;
 
-                }
+                    var imagenesNormalizadas = new List<string>();
 
-                var idsPendientes = mensajes
-                    .Where(m => !m.EsMio && !m.Visto)
-                    .Select(m => m.IdMensaje)
-                    .ToList();
-
-                if (idsPendientes.Count > 0)
-                {
-                    var idsPendientesSet = idsPendientes.ToHashSet();
-
-                    foreach (var mensaje in mensajes)
+                    if (mensaje.Imagenes != null)
                     {
-                        if (idsPendientesSet.Contains(mensaje.IdMensaje))
+                        foreach (var imagen in mensaje.Imagenes)
                         {
-                            mensaje.Visto = true;
+                            if (!string.IsNullOrWhiteSpace(imagen))
+                            {
+                                string urlImagen = ObtenerUrlImagen(imagen);
+
+                                if (!imagenesNormalizadas.Contains(
+                                    urlImagen,
+                                    StringComparer.OrdinalIgnoreCase))
+                                {
+                                    imagenesNormalizadas.Add(urlImagen);
+                                }
+                            }
                         }
                     }
-                }
-                var cronometroInterfaz = System.Diagnostics.Stopwatch.StartNew();
-                mensajesActuales = new ObservableCollection<Mensaje>(mensajes);
 
-                MensajesCollectionView.ItemsSource = mensajesActuales;
-                CargandoMensajesLabel.IsVisible = false;
-                cronometroInterfaz.Stop();
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"[CHAT] Preparación y asignación de mensajes: " +
-                    $"{cronometroInterfaz.ElapsedMilliseconds} ms");
-                if (idsPendientes.Count > 0)
-                {
-                    _ = MarcarVariosComoLeidosAsync(idsPendientes);
-                }
-
-                if (EsCargaInicial && mensajes.Count > 0)
-                {
-                    EsCargaInicial = false;
-
-                    MainThread.BeginInvokeOnMainThread(async () =>
+                    if (!string.IsNullOrWhiteSpace(mensaje.UrlImagen))
                     {
-                        await Task.Delay(100);
+                        string urlImagen =
+                            ObtenerUrlImagen(mensaje.UrlImagen);
 
-                        MensajesCollectionView.ScrollTo(
-                            mensajes[^1],
-                            position: ScrollToPosition.End,
-                            animate: false);
+                        if (!imagenesNormalizadas.Contains(
+                            urlImagen,
+                            StringComparer.OrdinalIgnoreCase))
+                        {
+                            imagenesNormalizadas.Add(urlImagen);
+                        }
+                    }
+
+                    // Conservar las URL originales recibidas de la API.  
+                    mensaje.Imagenes = imagenesNormalizadas;
+
+                    // Preparar las rutas locales de las imágenes descargadas.  
+                    mensaje.ImagenesLocales = new List<string>();
+
+                    foreach (string urlImagen in mensaje.Imagenes)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        string? rutaLocal = await DescargarImagenChatAsync(
+                            urlImagen,
+                            cancellationToken);
+
+                        if (!string.IsNullOrWhiteSpace(rutaLocal))
+                        {
+                            mensaje.ImagenesLocales.Add(rutaLocal);
+                        }
+                    }
+
+                    mensaje.MostrarAcciones = false;
+
+                    _mensajes.Add(mensaje);
+                }
+
+                NuevosMensajesButton.IsVisible = false;
+
+                if (_mensajes.Count > 0)
+                {
+                    await MainThread.InvokeOnMainThreadAsync(async () =>
+                    {
+                        await Task.Delay(100, cancellationToken);
+
+                        if (_mensajes.Count > 0)
+                        {
+                            MensajesCollectionView.ScrollTo(
+                                _mensajes[^1],
+                                position: ScrollToPosition.End,
+                                animate: false);
+                        }
                     });
                 }
 
+                if (!_conversacionArchivada)
+                    _ = MarcarMensajesPendientesComoLeidosAsync();
+            }
+            catch (OperationCanceledException)
+            {
+
             }
             catch (Exception ex)
             {
-                CargandoMensajesLabel.IsVisible = false;
-
                 await DisplayAlertAsync(
-                    "Error de conexión",
-                    ex.Message,
+                    "Error",
+                    $"No se pudieron cargar los mensajes.\n\n{ex.Message}",
                     "OK");
             }
-        }
-        private void DesplazarAlUltimoMensaje()
-        {
-            if (MensajesCollectionView.ItemsSource is IList<Mensaje> mensajes &&
-            mensajes.Count > 0)
+            finally
             {
-                MainThread.BeginInvokeOnMainThread(() =>
+                CargandoMensajesLabel.IsVisible = false;
+            }
+        }
+
+        private string ObtenerUrlImagen(string ruta)
+        {
+            if (Uri.TryCreate(ruta, UriKind.Absolute, out var uriAbsoluta))
+                return uriAbsoluta.ToString();
+
+            var baseUri = new Uri(
+                ApiConfig.BaseUrl.TrimEnd('/') + "/");
+
+            return new Uri(baseUri, ruta.TrimStart('/')).ToString();
+        }
+
+        private async Task MarcarMensajesPendientesComoLeidosAsync()
+        {
+            if (_conversacionArchivada ||
+                !SesionUsuario.EstaLogueado)
+            {
+                return;
+            }
+
+            var pendientes = _mensajes
+                .Where(m => !m.EsMio && !m.Visto)
+                .Select(m => m.IdMensaje)
+                .ToList();
+
+            foreach (int idMensaje in pendientes)
+            {
+                try
+                {
+                    string url =
+                        CrearUrl($"api/Mensajes/{idMensaje}/Leer");
+
+                    using var respuesta =
+    await Api.EnviarAutenticadoAsync(
+        () => new HttpRequestMessage(
+            HttpMethod.Put,
+            url));
+
+                    if (respuesta.IsSuccessStatusCode)
+                    {
+                        var mensaje = _mensajes.FirstOrDefault(
+                            m => m.IdMensaje == idMensaje);
+
+                        if (mensaje != null)
+                            mensaje.Visto = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"No se pudo marcar el mensaje {idMensaje} como leído: " +
+                        ex.Message);
+                }
+            }
+        }
+
+        private void OnMensajesScrolled(
+            object sender,
+            ItemsViewScrolledEventArgs e)
+        {
+            if (_mensajes.Count == 0)
+            {
+                _estaAlFinal = true;
+                NuevosMensajesButton.IsVisible = false;
+                return;
+            }
+
+            _estaAlFinal =
+                e.LastVisibleItemIndex >= _mensajes.Count - 1;
+
+            NuevosMensajesButton.IsVisible = !_estaAlFinal;
+        }
+        private async void OnNuevosMensajesClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (_mensajes.Count == 0)
+                return;
+
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                await Task.Delay(100);
+
+                if (_mensajes.Count > 0)
                 {
                     MensajesCollectionView.ScrollTo(
-                        mensajes[^1],
+                        _mensajes[^1],
                         position: ScrollToPosition.End,
-                        animate: false);
-                });
-            }
-        }
-        private void OnMensajesScrolled(object sender, ItemsViewScrolledEventArgs e)
-        {
-            int totalMensajes = mensajesActuales.Count;
-
-            if (totalMensajes > 0)
-            {
-                EstaAlFinal = e.LastVisibleItemIndex >= totalMensajes - 1;
-            }
-            else
-            {
-                EstaAlFinal = true;
-            }
-
-            NuevosMensajesButton.IsVisible = !EstaAlFinal;
-        }
-
-        private void OnNuevosMensajesClicked(object sender, EventArgs e)
-        {
-            if (MensajesCollectionView.ItemsSource is List<Mensaje> mensajes &&
-                mensajes.Count > 0)
-            {
-                MensajesCollectionView.ScrollTo(
-                    mensajes[^1],
-                    position: ScrollToPosition.End,
-                    animate: true);
-            }
-        }
-
-        private async Task MarcarMensajeComoVistoAsync(int idMensaje)
-        {
-            try
-            {
-                if (!SesionUsuario.EstaLogueado)
-                {
-                    return;
+                        animate: true);
                 }
-
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
-
-                string url =
-                    $"{ApiConfig.BaseUrl}/api/Mensajes/{idMensaje}/Leer";
-
-                var response = await client.PutAsync(url, null);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    System.Diagnostics.Debug.WriteLine(
-                        $"No se pudo marcar el mensaje {idMensaje} como visto. " +
-                        $"Código HTTP: {(int)response.StatusCode}");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"Error al marcar el mensaje como visto: {ex.Message}");
-            }
+            });
         }
 
-        private async Task MarcarVariosComoLeidosAsync(
-            List<int> idsMensajes)
+        private async void OnSeleccionarImagenClicked(
+            object sender,
+            EventArgs e)
         {
-            try
-            {
-                if (!SesionUsuario.EstaLogueado ||
-                    idsMensajes == null ||
-                    idsMensajes.Count == 0)
-                {
-                    return;
-                }
+            if (_conversacionArchivada)
+                return;
 
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
-
-                string json =
-                    JsonSerializer.Serialize(idsMensajes);
-
-                using var contenido = new StringContent(
-                    json,
-                    System.Text.Encoding.UTF8,
-                    "application/json");
-
-                string url =
-                    $"{ApiConfig.BaseUrl}/api/Mensajes/Leer";
-
-                var response = await client.PutAsync(url, contenido);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    string error =
-                        await response.Content.ReadAsStringAsync();
-
-                    System.Diagnostics.Debug.WriteLine(
-                        $"No se pudieron marcar los mensajes como leídos. " +
-                        $"HTTP {(int)response.StatusCode}: {error}");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"Error al marcar varios mensajes como leídos: {ex.Message}");
-            }
-        }
-
-        private async void OnSeleccionarImagenClicked(object sender, EventArgs e)
-        {
             try
             {
                 var resultados = await MediaPicker.PickPhotosAsync(
-                new MediaPickerOptions
-                {
-                   Title = "Selecciona imágenes",
-                   SelectionLimit = 5
-                });
+                    new MediaPickerOptions
+                    {
+                        Title = "Selecciona imágenes",
+                        SelectionLimit = 5
+                    });
+
                 if (resultados == null)
-                {
                     return;
-                }
 
                 var nuevasImagenes = resultados.ToList();
 
-                if (nuevasImagenes.Count == 0)
+                int disponibles = 5 - _imagenesSeleccionadas.Count;
+
+                if (nuevasImagenes.Count > disponibles)
                 {
-                    return;
-                }
-
-                if (imagenesSeleccionadas.Count + nuevasImagenes.Count > 5)
-                {
-                    int disponibles = 5 - imagenesSeleccionadas.Count;
-
-                    if (disponibles <= 0)
-                    {
-                        await DisplayAlertAsync(
-                            "Límite de imágenes",
-                            "Un mensaje puede tener máximo 5 imágenes.",
-                            "OK");
-
-                        return;
-                    }
-
                     nuevasImagenes = nuevasImagenes
-                        .Take(disponibles)
+                        .Take(Math.Max(0, disponibles))
                         .ToList();
 
                     await DisplayAlertAsync(
                         "Límite de imágenes",
-                        "Solo puedes seleccionar hasta 5 imágenes por mensaje.",
+                        "Puedes enviar un máximo de cinco imágenes por mensaje.",
                         "OK");
                 }
 
                 foreach (var imagen in nuevasImagenes)
                 {
                     if (imagen != null &&
-                        !imagenesSeleccionadas.Contains(imagen))
+                        !_imagenesSeleccionadas.Contains(imagen))
                     {
-                        imagenesSeleccionadas.Add(imagen);
+                        _imagenesSeleccionadas.Add(imagen);
                     }
                 }
 
-                ImagenesPreviewCollectionView.ItemsSource = null;
-                ImagenesPreviewCollectionView.ItemsSource = imagenesSeleccionadas;
-
                 ImagenPreviewBorder.IsVisible =
-                    imagenesSeleccionadas.Count > 0;
-
+                    _imagenesSeleccionadas.Count > 0;
             }
             catch (Exception ex)
             {
@@ -423,527 +744,530 @@ namespace MarketplaceUAT.App.Pages
                     "OK");
             }
         }
+
         private void OnEliminarImagenSeleccionadaClicked(
-        object sender,
-        EventArgs e)
+            object sender,
+            EventArgs e)
         {
             if (sender is Button boton &&
                 boton.CommandParameter is FileResult imagen)
             {
-                imagenesSeleccionadas.Remove(imagen);
-
-                ImagenesPreviewCollectionView.ItemsSource = null;
-                ImagenesPreviewCollectionView.ItemsSource =
-                    imagenesSeleccionadas;
+                _imagenesSeleccionadas.Remove(imagen);
 
                 ImagenPreviewBorder.IsVisible =
-                    imagenesSeleccionadas.Count > 0;
-            }
-        }
-        private async Task<string?> SubirImagenAsync(FileResult imagen)
-        {
-            try
-            {
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(30)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
-
-
-                using var stream = await imagen.OpenReadAsync();
-
-                using var contenido = new MultipartFormDataContent();
-
-                using var archivoContenido = new StreamContent(stream);
-
-                archivoContenido.Headers.ContentType =
-                    new System.Net.Http.Headers.MediaTypeHeaderValue(
-                        "application/octet-stream");
-
-                contenido.Add(
-                    archivoContenido,
-                    "archivo",
-                    imagen.FileName);
-
-                string url =
-                    $"{ApiConfig.BaseUrl}/api/ImagenesProducto/Subir";
-
-                var response = await client.PostAsync(
-                    url,
-                    contenido);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    return null;
-                }
-
-                string json =
-                    await response.Content.ReadAsStringAsync();
-
-                using var documento =
-                    JsonDocument.Parse(json);
-
-                if (!documento.RootElement.TryGetProperty(
-                    "urlImagen",
-                    out var propiedadUrl))
-                {
-                    return null;
-                }
-
-                return propiedadUrl.GetString();
-            }
-            catch
-            {
-                return null;
+                    _imagenesSeleccionadas.Count > 0;
             }
         }
 
-        private async Task<string?> SubirImagenMensajeAsync(FileResult imagen)
+        private async Task<bool> AsegurarConversacionAsync()
         {
-            try
+            if (int.TryParse(IdConversacion, out int idActual) &&
+    idActual > 0)
             {
-                clienteSubidaImagen.DefaultRequestHeaders.Authorization =
-                      new System.Net.Http.Headers.AuthenticationHeaderValue(
-                     "Bearer",
-                      SesionUsuario.Token);
+                bool conversacionVerificada =
+     await CargarDatosConversacionAsync(idActual);
 
-                using var stream = await imagen.OpenReadAsync();
-
-                using var contenido = new MultipartFormDataContent();
-
-                using var archivoContenido =
-                    new StreamContent(stream);
-
-
-                string extension = Path.GetExtension(imagen.FileName).ToLowerInvariant();
-
-                string tipoContenido = extension switch
+                if (!conversacionVerificada)
                 {
-                    ".jpg" or ".jpeg" => "image/jpeg",
-                    ".png" => "image/png",
-                    ".webp" => "image/webp",
-                    _ => "application/octet-stream"
-                };
+                    _conversacionVerificada = false;
 
-                archivoContenido.Headers.ContentType =
-                    new System.Net.Http.Headers.MediaTypeHeaderValue(tipoContenido);
+                    await DisplayAlertAsync(
+                        "Aviso",
+                        "No se pudo verificar que tengas acceso a esta conversación.",
+                        "OK");
 
-                contenido.Add(
-                    archivoContenido,
-                    "archivo",
-                    imagen.FileName);
+                    return false;
+                }
 
-                string url =
-                    $"{ApiConfig.BaseUrl}/api/ImagenesMensaje/Subir?idConversacion={IdConversacion}";
-
-                var response = await clienteSubidaImagen.PostAsync(url, contenido);
-
-                if (!response.IsSuccessStatusCode)
+                if (_conversacionArchivada)
                 {
-                    string error = await response.Content.ReadAsStringAsync();
+                    await DisplayAlertAsync(
+                        "Conversación archivada",
+                        "Esta conversación no admite mensajes nuevos.",
+                        "OK");
 
-                    await MainThread.InvokeOnMainThreadAsync(async () =>
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (!int.TryParse(IdProducto, out int idProducto) ||
+                idProducto <= 0)
+            {
+                await DisplayAlertAsync(
+                    "Error",
+                    "No se pudo identificar el producto.",
+                    "OK");
+
+                return false;
+            }
+
+            var datos = new
+            {
+                IdProducto = idProducto
+            };
+
+            string url = CrearUrl("api/Conversaciones");
+
+            using var respuesta =
+                await Api.EnviarAutenticadoAsync(
+                    () =>
                     {
-                        await DisplayAlertAsync(
-                            "Error al subir imagen",
-                            $"Código HTTP: {(int)response.StatusCode}\n\n{error}",
-                            "OK");
+                        string json = JsonSerializer.Serialize(datos);
+
+                        var contenido = new StringContent(
+                            json,
+                            Encoding.UTF8,
+                            "application/json");
+
+                        return new HttpRequestMessage(
+                            HttpMethod.Post,
+                            url)
+                        {
+                            Content = contenido
+                        };
+                    });
+            if (!respuesta.IsSuccessStatusCode)
+            {
+                string error =
+                    await respuesta.Content.ReadAsStringAsync();
+
+                await DisplayAlertAsync(
+                    "Error",
+                    "No se pudo crear o recuperar la conversación.\n\n" +
+                    $"Código HTTP: {(int)respuesta.StatusCode}\n{error}",
+                    "OK");
+
+                return false;
+            }
+
+            string respuestaJson =
+                await respuesta.Content.ReadAsStringAsync();
+
+            var conversacion =
+                JsonSerializer.Deserialize<Conversacion>(
+                    respuestaJson,
+                    OpcionesJson);
+
+            if (conversacion == null ||
+                conversacion.IdConversacion <= 0)
+            {
+                await DisplayAlertAsync(
+                    "Error",
+                    "La API no devolvió un identificador válido de conversación.",
+                    "OK");
+
+                return false;
+            }
+
+            IdConversacion = conversacion.IdConversacion.ToString();
+
+            bool encontrada =
+                await CargarDatosConversacionAsync(
+                    conversacion.IdConversacion);
+
+            if (!encontrada)
+            {
+                await DisplayAlertAsync(
+                    "Aviso",
+                    "Se obtuvo el identificador, pero no se pudo verificar " +
+                    "el estado de la conversación.",
+                    "OK");
+
+                return false;
+            }
+
+            if (_conversacionArchivada)
+            {
+                await DisplayAlertAsync(
+                    "Conversación archivada",
+                    "Esta conversación no admite mensajes nuevos.",
+                    "OK");
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private sealed class RespuestaSubidaImagen
+        {
+            public string? UrlImagen { get; set; }
+        }
+
+        private async Task<string?> SubirImagenMensajeAsync(
+    FileResult imagen,
+    int idConversacion)
+        {
+            string extension =
+                Path.GetExtension(imagen.FileName).ToLowerInvariant();
+
+            string tipoContenido = extension switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                _ => "application/octet-stream"
+            };
+
+            string url = CrearUrl(
+                $"api/ImagenesMensaje/Subir?idConversacion={idConversacion}");
+
+            using var respuesta =
+                await Api.EnviarAutenticadoAsync(
+                    async () =>
+                    {
+                        var stream = await imagen.OpenReadAsync();
+
+                        var archivoContenido = new StreamContent(stream);
+
+                        archivoContenido.Headers.ContentType =
+                            new MediaTypeHeaderValue(tipoContenido);
+
+                        var contenido = new MultipartFormDataContent();
+
+                        contenido.Add(
+                            archivoContenido,
+                            "archivo",
+                            imagen.FileName);
+
+                        return new HttpRequestMessage(
+                            HttpMethod.Post,
+                            url)
+                        {
+                            Content = contenido
+                        };
                     });
 
-                    return null;
-                }
-
-                string json =
-                    await response.Content.ReadAsStringAsync();
-
-                using var documento =
-                    JsonDocument.Parse(json);
-
-                if (!documento.RootElement.TryGetProperty(
-                    "urlImagen",
-                    out var propiedadUrl))
-                {
-                    return null;
-                }
-
-                return propiedadUrl.GetString();
-            }
-            catch
+            if (!respuesta.IsSuccessStatusCode)
             {
-                return null;
+                string error =
+                    await respuesta.Content.ReadAsStringAsync();
+
+                throw new Exception(
+                    $"No se pudo subir {imagen.FileName}. " +
+                    $"HTTP {(int)respuesta.StatusCode}: {error}");
             }
+
+            string json =
+                await respuesta.Content.ReadAsStringAsync();
+
+            var resultado =
+                JsonSerializer.Deserialize<RespuestaSubidaImagen>(
+                    json,
+                    OpcionesJson);
+
+            if (string.IsNullOrWhiteSpace(resultado?.UrlImagen))
+            {
+                throw new Exception(
+                    "La API no devolvió la URL de la imagen subida.");
+            }
+
+            return resultado.UrlImagen;
         }
-        private async void OnEnviarMensajeClicked(object sender, EventArgs e)
+
+        private async Task<bool> RegistrarImagenMensajeAsync(
+            int idMensaje,
+            string urlImagen)
+        {
+            var datos = new
+            {
+                IdMensaje = idMensaje,
+                UrlImagen = urlImagen
+            };
+
+            string url = CrearUrl("api/ImagenesMensaje");
+
+            using var respuesta =
+                await Api.EnviarAutenticadoAsync(
+                    () =>
+                    {
+                        string json = JsonSerializer.Serialize(datos);
+
+                        var contenido = new StringContent(
+                            json,
+                            Encoding.UTF8,
+                            "application/json");
+
+                        return new HttpRequestMessage(
+                            HttpMethod.Post,
+                            url)
+                        {
+                            Content = contenido
+                        };
+                    });
+
+            if (respuesta.IsSuccessStatusCode)
+                return true;
+
+            string error = await respuesta.Content.ReadAsStringAsync();
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Error al registrar imagen: HTTP {(int)respuesta.StatusCode}: {error}");
+
+            return false;
+        }
+
+        private async Task<bool> IntentarEliminarMensajeIncompletoAsync(
+    int idMensaje)
         {
             try
             {
-                EnviarMensajeButton.IsEnabled = false;
+                string url = CrearUrl($"api/Mensajes/{idMensaje}");
 
-                if (!SesionUsuario.EstaLogueado)
+                using var respuesta =
+                    await Api.EnviarAutenticadoAsync(
+                        () => new HttpRequestMessage(
+                            HttpMethod.Delete,
+                            url));
+
+                return respuesta.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Error al limpiar mensaje incompleto: {ex.Message}");
+
+                return false;
+            }
+        }
+
+        private async void OnEnviarMensajeClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (_conversacionArchivada)
+                return;
+
+            string texto = MensajeEntry.Text?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(texto) &&
+                _imagenesSeleccionadas.Count == 0)
+            {
+                return;
+            }
+
+            if (!SesionUsuario.EstaLogueado)
+            {
+                await DisplayAlertAsync(
+                    "Cuenta requerida",
+                    "Debes iniciar sesión para enviar mensajes.",
+                    "OK");
+
+                return;
+            }
+
+            EnviarMensajeButton.IsEnabled = false;
+            SeleccionarImagenButton.IsEnabled = false;
+            MensajeEntry.IsEnabled = false;
+
+            try
+            {
+
+                bool conversacionLista =
+                    await AsegurarConversacionAsync();
+
+                if (!conversacionLista)
+                    return;
+
+                if (_conversacionArchivada ||
+                    !int.TryParse(IdConversacion, out int idConversacion) ||
+                    idConversacion <= 0)
                 {
-                    await DisplayAlertAsync(
-                        "Error",
-                        "Debes iniciar sesión para enviar mensajes.",
-                        "OK");
-
                     return;
                 }
 
-                if (string.IsNullOrWhiteSpace(MensajeEntry.Text) &&
-                    imagenesSeleccionadas.Count == 0)
+                var imagenesPorEnviar =
+                    _imagenesSeleccionadas.ToList();
+
+                if (_idConversacionSolicitudPendiente != idConversacion)
                 {
-                    return;
+                    _idSolicitudPendiente = null;
+                    _idConversacionSolicitudPendiente = idConversacion;
                 }
 
-                bool teniaImagenes = imagenesSeleccionadas.Count > 0;
+                _idSolicitudPendiente ??= Guid.NewGuid();
 
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
+                Guid idSolicitud = _idSolicitudPendiente.Value;
 
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
-
-                if (string.IsNullOrWhiteSpace(IdConversacion))
-                {
-                    if (!int.TryParse(IdProducto, out int idProducto) ||
-                        !int.TryParse(IdUsuarioVendedor, out int idUsuarioVendedor))
-                    {
-                        await DisplayAlertAsync(
-                            "Error",
-                            "No se pudo identificar el producto o el vendedor.",
-                            "OK");
-
-                        return;
-                    }
-
-                    var datosConversacion = new
-                    {
-                        IdProducto = idProducto
-                    };
-
-                    string jsonConversacion =
-                        JsonSerializer.Serialize(datosConversacion);
-
-                    using var contenidoConversacion = new StringContent(
-                        jsonConversacion,
-                        System.Text.Encoding.UTF8,
-                        "application/json");
-
-                    string urlConversacion =
-                        $"{ApiConfig.BaseUrl}/api/Conversaciones";
-
-                    var respuestaConversacion = await client.PostAsync(
-                        urlConversacion,
-                        contenidoConversacion);
-
-                    if (!respuestaConversacion.IsSuccessStatusCode)
-                    {
-                        string errorConversacion =
-                            await respuestaConversacion.Content.ReadAsStringAsync();
-
-                        await DisplayAlertAsync(
-                            "Error",
-                            $"No se pudo crear la conversación.\n\n{errorConversacion}",
-                            "OK");
-
-                        return;
-                    }
-
-                    string jsonRespuestaConversacion =
-                        await respuestaConversacion.Content.ReadAsStringAsync();
-
-                    var conversacionCreada =
-                        JsonSerializer.Deserialize<Conversacion>(
-                            jsonRespuestaConversacion,
-                            new JsonSerializerOptions
-                            {
-                                PropertyNameCaseInsensitive = true
-                            });
-
-                    if (conversacionCreada == null)
-                    {
-                        await DisplayAlertAsync(
-                            "Error",
-                            "No se pudo obtener la información de la conversación.",
-                            "OK");
-
-                        return;
-                    }
-
-                    omitirCargaAutomatica = true;
-                    IdConversacion = conversacionCreada.IdConversacion.ToString();
-                    omitirCargaAutomatica = false;
-                }
-
-                if (!int.TryParse(IdConversacion, out int idConversacion))
-                {
-                    await DisplayAlertAsync(
-                        "Error",
-                        "El identificador de la conversación no es válido.",
-                        "OK");
-
-                    return;
-                }
-
-                var nuevoMensaje = new
+                var datosMensaje = new
                 {
                     IdConversacion = idConversacion,
-                    IdUsuario = SesionUsuario.UsuarioActual!.IdUsuario,
-                    Contenido = string.IsNullOrWhiteSpace(MensajeEntry.Text)
+                    IdSolicitud = idSolicitud,
+                    Contenido = string.IsNullOrWhiteSpace(texto)
                         ? null
-                        : MensajeEntry.Text.Trim(),
+                        : texto,
                     UrlImagen = (string?)null,
-                    TieneImagenes = imagenesSeleccionadas.Count > 0
+                    TieneImagenes = imagenesPorEnviar.Count > 0
                 };
 
-                string json = JsonSerializer.Serialize(nuevoMensaje);
+                string urlMensaje = CrearUrl("api/Mensajes");
 
-                using var content = new StringContent(
-                    json,
-                    System.Text.Encoding.UTF8,
-                    "application/json");
+                using var respuesta =
+                    await Api.EnviarAutenticadoAsync(
+                        () =>
+                        {
+                            string json = JsonSerializer.Serialize(datosMensaje);
 
-                string url = $"{ApiConfig.BaseUrl}/api/Mensajes";
+                            var contenido = new StringContent(
+                                json,
+                                Encoding.UTF8,
+                                "application/json");
 
-                var response = await client.PostAsync(url, content);
+                            return new HttpRequestMessage(
+                                HttpMethod.Post,
+                                urlMensaje)
+                            {
+                                Content = contenido
+                            };
+                        });
 
-                if (!response.IsSuccessStatusCode)
+                if (!respuesta.IsSuccessStatusCode)
                 {
-                    string mensaje = await response.Content.ReadAsStringAsync();
+                    string error =
+                        await respuesta.Content.ReadAsStringAsync();
+
+                    if (respuesta.StatusCode ==
+                        System.Net.HttpStatusCode.Gone)
+                    {
+                        _idSolicitudPendiente = null;
+
+                        await DisplayAlertAsync(
+                            "Reintento de envío",
+                            "El mensaje anterior fue eliminado y ya no puede reutilizarse. " +
+                            "Se generará un nuevo identificador cuando vuelvas a enviar.",
+                            "OK");
+
+                        return;
+                    }
 
                     await DisplayAlertAsync(
                         "Error",
-                        $"No se pudo enviar el mensaje.\n\n{mensaje}",
+                        "No se pudo enviar el mensaje.\n\n" +
+                        $"Código HTTP: {(int)respuesta.StatusCode}\n{error}",
                         "OK");
 
                     return;
                 }
 
-                string respuestaJson = await response.Content.ReadAsStringAsync();
+                string respuestaJson =
+                    await respuesta.Content.ReadAsStringAsync();
 
-                using var documento = JsonDocument.Parse(respuestaJson);
+                var mensajeCreado =
+                    JsonSerializer.Deserialize<Mensaje>(
+                        respuestaJson,
+                        OpcionesJson);
 
-                int idMensaje =
-                    documento.RootElement.GetProperty("idMensaje").GetInt32();
-
-                foreach (var imagen in imagenesSeleccionadas)
+                if (mensajeCreado == null ||
+                    mensajeCreado.IdMensaje <= 0)
                 {
-                    string? urlImagen = await SubirImagenMensajeAsync(imagen);
+                    await DisplayAlertAsync(
+                        "Error",
+                        "El servidor respondió, pero no devolvió un identificador válido del mensaje.",
+                        "OK");
 
-                    if (string.IsNullOrWhiteSpace(urlImagen))
+                    return;
+                }
+
+                var urlsImagenesSubidas = new List<string>();
+
+                try
+                {
+                    foreach (var imagen in imagenesPorEnviar)
                     {
-                        await DisplayAlertAsync(
-                            "Error",
-                            $"No se pudo subir la imagen: {imagen.FileName}",
-                            "OK");
+                        string? urlImagen = await SubirImagenMensajeAsync(
+                            imagen,
+                            idConversacion);
 
-                        return;
+                        if (string.IsNullOrWhiteSpace(urlImagen))
+                        {
+                            throw new Exception(
+                                $"No se obtuvo la URL de {imagen.FileName}.");
+                        }
+
+                        bool registrada =
+                            await RegistrarImagenMensajeAsync(
+                                mensajeCreado.IdMensaje,
+                                urlImagen);
+
+                        if (!registrada)
+                        {
+                            throw new Exception(
+                                $"La imagen {imagen.FileName} se subió, " +
+                                "pero no se pudo registrar en el mensaje.");
+                        }
+
+                        urlsImagenesSubidas.Add(
+                            ObtenerUrlImagen(urlImagen));
+                    }
+                }
+                catch (Exception exImagen)
+                {
+                    bool limpiado =
+                        await IntentarEliminarMensajeIncompletoAsync(
+                            mensajeCreado.IdMensaje);
+
+                    if (limpiado)
+                    {
+                        _idSolicitudPendiente = null;
+                        _idConversacionSolicitudPendiente = null;
                     }
 
-                    var nuevaImagen = new
-                    {
-                        IdMensaje = idMensaje,
-                        UrlImagen = urlImagen
-                    };
+                    await DisplayAlertAsync(
+                        "Envío incompleto",
+                        $"{exImagen.Message}\n\n" +
+                        (limpiado
+                            ? "Se retiró el mensaje incompleto de la conversación."
+                            : "No se pudo confirmar la eliminación del mensaje incompleto.") +
+                        "\n\nEl texto y las imágenes seleccionadas se conservaron para que puedas intentarlo de nuevo.",
+                        "OK");
 
-                    string jsonImagen = JsonSerializer.Serialize(nuevaImagen);
+                    await CargarMensajesAsync(
+                        CancellationToken.None);
 
-                    using var contenidoImagen = new StringContent(
-                        jsonImagen,
-                        System.Text.Encoding.UTF8,
-                        "application/json");
-
-                    string urlRegistro =
-                        $"{ApiConfig.BaseUrl}/api/ImagenesMensaje";
-
-                    var responseImagen = await client.PostAsync(
-                        urlRegistro,
-                        contenidoImagen);
-
-                    if (!responseImagen.IsSuccessStatusCode)
-                    {
-                        string mensajeError =
-                            await responseImagen.Content.ReadAsStringAsync();
-
-                        await DisplayAlertAsync(
-                            "Error al registrar imagen",
-                            $"Código HTTP: {(int)responseImagen.StatusCode}\n\n{mensajeError}",
-                            "OK");
-
-                        return;
-                    }
+                    return;
                 }
 
                 MensajeEntry.Text = string.Empty;
-                imagenesSeleccionadas.Clear();
-
-                ImagenesPreviewCollectionView.ItemsSource = null;
-                ImagenesPreviewCollectionView.ItemsSource = imagenesSeleccionadas;
-
+                _imagenesSeleccionadas.Clear();
                 ImagenPreviewBorder.IsVisible = false;
 
-                if (!teniaImagenes)
-                {
-                    var mensajeNuevo =
-                        JsonSerializer.Deserialize<MarketplaceUAT.App.Models.Mensaje>(
-                            respuestaJson,
-                            new JsonSerializerOptions
-                            {
-                                PropertyNameCaseInsensitive = true
-                            });
+                await MostrarMensajeEnviadoAsync(
+                    mensajeCreado,
+                    urlsImagenesSubidas);
 
-                    if (mensajeNuevo != null)
-                    {
-                        mensajeNuevo.EsMio = true;
-                        mensajesActuales.Add(mensajeNuevo);
-                        MensajesCollectionView.ItemsSource = mensajesActuales;
-                    }
-                    else
-                    {
-                        await CargarConversacionAsync();
-                    }
-                }
-                else
-                {
-                    await CargarConversacionAsync();
-                }
-
-                DesplazarAlUltimoMensaje();
+                _idSolicitudPendiente = null;
+                _idConversacionSolicitudPendiente = null;
 
             }
             catch (Exception ex)
             {
                 await DisplayAlertAsync(
                     "Error de conexión",
-                    $"No se pudo enviar el mensaje.\n\n{ex.Message}",
+                    $"No se pudo completar el envío.\n\n{ex.Message}",
                     "OK");
             }
             finally
             {
-                EnviarMensajeButton.IsEnabled = true;
+                bool permitirEdicion =
+                    !_conversacionArchivada && _conversacionVerificada;
+
+                EnviarMensajeButton.IsEnabled = permitirEdicion;
+                SeleccionarImagenButton.IsEnabled = permitirEdicion;
+                MensajeEntry.IsEnabled = permitirEdicion;
             }
         }
 
-        private async void OnEliminarMensajeClicked(
-            object sender,
-            EventArgs e)
-        {
-            if (sender is not Button boton ||
-                boton.CommandParameter is not Mensaje mensaje)
-            {
-                return;
-            }
-
-            bool confirmar = await DisplayAlertAsync(
-                "Eliminar mensaje",
-                "¿Quieres eliminar este mensaje?",
-                "Sí",
-                "No");
-
-            if (!confirmar)
-            {
-                return;
-            }
-
-            try
-            {
-                if (!SesionUsuario.EstaLogueado)
-                {
-                    await DisplayAlertAsync(
-                        "Error",
-                        "Debes iniciar sesión.",
-                        "OK");
-
-                    return;
-                }
-
-                int idUsuario =
-                    SesionUsuario.UsuarioActual!.IdUsuario;
-
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
-
-                string url =
-                    $"{ApiConfig.BaseUrl}/api/Mensajes/{mensaje.IdMensaje}?idUsuario={idUsuario}";
-
-                var response = await client.DeleteAsync(url);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    string error =
-                        await response.Content.ReadAsStringAsync();
-
-                    await DisplayAlertAsync(
-                        "Error",
-                        $"No se pudo eliminar el mensaje.\n\n{error}",
-                        "OK");
-
-                    return;
-                }
-
-                if (MensajesCollectionView.ItemsSource
-                    is ObservableCollection<Mensaje> mensajes)
-                {
-                    mensajes.Remove(mensaje);
-                }
-            }
-            catch (Exception ex)
-            {
-                await DisplayAlertAsync(
-                    "Error",
-                    $"No se pudo eliminar el mensaje.\n\n{ex.Message}",
-                    "OK");
-            }
-        }
         private async void OnEditarMensajeClicked(
             object sender,
             EventArgs e)
         {
-            if (sender is not Button boton ||
-                boton.CommandParameter is not Mensaje mensaje)
-            {
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(mensaje.Contenido))
+            if (_conversacionArchivada ||
+                sender is not Button boton ||
+                boton.CommandParameter is not Mensaje mensaje ||
+                !mensaje.EsMio ||
+                string.IsNullOrWhiteSpace(mensaje.Contenido))
             {
                 return;
             }
@@ -953,12 +1277,11 @@ namespace MarketplaceUAT.App.Pages
                 "Modifica el texto de tu mensaje:",
                 accept: "Guardar",
                 cancel: "Cancelar",
-                initialValue: mensaje.Contenido);
+                initialValue: mensaje.Contenido,
+                maxLength: 1000);
 
             if (nuevoContenido == null)
-            {
                 return;
-            }
 
             nuevoContenido = nuevoContenido.Trim();
 
@@ -974,60 +1297,43 @@ namespace MarketplaceUAT.App.Pages
 
             try
             {
-                if (!SesionUsuario.EstaLogueado)
-                {
-                    await DisplayAlertAsync(
-                        "Error",
-                        "Debes iniciar sesión.",
-                        "OK");
-
-                    return;
-                }
-
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
 
                 var datos = new
                 {
                     Contenido = nuevoContenido
                 };
 
-                string json =
-                    System.Text.Json.JsonSerializer.Serialize(datos);
-
-                using var contenido = new StringContent(
-                    json,
-                    System.Text.Encoding.UTF8,
-                    "application/json");
-
                 string url =
-                    $"{ApiConfig.BaseUrl}/api/Mensajes/{mensaje.IdMensaje}";
+    CrearUrl($"api/Mensajes/{mensaje.IdMensaje}");
 
-                var response = await client.PutAsync(url, contenido);
+                using var respuesta =
+                    await Api.EnviarAutenticadoAsync(
+                        () =>
+                        {
+                            string json = JsonSerializer.Serialize(datos);
 
-                if (!response.IsSuccessStatusCode)
+                            var contenido = new StringContent(
+                                json,
+                                Encoding.UTF8,
+                                "application/json");
+
+                            return new HttpRequestMessage(
+                                HttpMethod.Put,
+                                url)
+                            {
+                                Content = contenido
+                            };
+                        });
+
+                if (!respuesta.IsSuccessStatusCode)
                 {
                     string error =
-                        await response.Content.ReadAsStringAsync();
+                        await respuesta.Content.ReadAsStringAsync();
 
                     await DisplayAlertAsync(
                         "Error",
-                        $"No se pudo editar el mensaje.\n\n{error}",
+                        "No se pudo editar el mensaje.\n\n" +
+                        $"Código HTTP: {(int)respuesta.StatusCode}\n{error}",
                         "OK");
 
                     return;
@@ -1043,49 +1349,407 @@ namespace MarketplaceUAT.App.Pages
                     "OK");
             }
         }
-        protected override void OnDisappearing()
+
+        private async void OnEliminarMensajeClicked(
+            object sender,
+            EventArgs e)
         {
-            base.OnDisappearing();
-
-            imagenesSeleccionadas.Clear();
-
-            if (ImagenesPreviewCollectionView != null)
+            if (_conversacionArchivada ||
+                sender is not Button boton ||
+                boton.CommandParameter is not Mensaje mensaje ||
+                !mensaje.EsMio)
             {
-                ImagenesPreviewCollectionView.ItemsSource = null;
-                ImagenesPreviewCollectionView.ItemsSource =
-                    imagenesSeleccionadas;
+                return;
             }
 
-            if (ImagenPreviewBorder != null)
-            {
-                ImagenPreviewBorder.IsVisible = false;
-            }
-        }
-        private void MostrarAccionesMensaje(Mensaje? mensaje)
-        {
-            if (mensaje == null)
+            bool confirmar = await DisplayAlertAsync(
+                "Eliminar mensaje",
+                "¿Quieres eliminar este mensaje?",
+                "Sí",
+                "No");
+
+            if (!confirmar)
                 return;
 
-            if (MensajesCollectionView.ItemsSource
-                is IEnumerable<Mensaje> mensajes)
+            try
             {
-                bool ocultarActual =
-                    mensaje.MostrarAcciones;
+                string url =
+                    CrearUrl($"api/Mensajes/{mensaje.IdMensaje}");
 
-                foreach (var item in mensajes)
+                using var respuesta =
+    await Api.EnviarAutenticadoAsync(
+        () => new HttpRequestMessage(
+            HttpMethod.Delete,
+            url));
+
+                if (!respuesta.IsSuccessStatusCode)
                 {
-                    item.MostrarAcciones = false;
+                    string error =
+                        await respuesta.Content.ReadAsStringAsync();
+
+                    await DisplayAlertAsync(
+                        "Error",
+                        "No se pudo eliminar el mensaje.\n\n" +
+                        $"Código HTTP: {(int)respuesta.StatusCode}\n{error}",
+                        "OK");
+
+                    return;
                 }
 
-                if (!ocultarActual)
+                _mensajes.Remove(mensaje);
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlertAsync(
+                    "Error",
+                    $"No se pudo eliminar el mensaje.\n\n{ex.Message}",
+                    "OK");
+            }
+        }
+
+        private async Task<string?> DescargarImagenChatAsync(
+    string urlImagen,
+    CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(urlImagen))
+                    return null;
+
+                if (!Uri.TryCreate(
+                    urlImagen,
+                    UriKind.Absolute,
+                    out var uriImagen))
                 {
-                    mensaje.MostrarAcciones = true;
-                    mensajeSeleccionadoId = mensaje.IdMensaje;
+                    return null;
+                }
+
+                // Obtener el nombre del archivo de la URL.  
+                string nombreArchivo =
+                    Path.GetFileName(uriImagen.LocalPath);
+
+                if (string.IsNullOrWhiteSpace(nombreArchivo))
+                    return null;
+
+                // Crear una carpeta temporal para las imágenes del chat.  
+                string carpetaImagenes = Path.Combine(
+                    FileSystem.CacheDirectory,
+                    "ChatImages");
+
+                Directory.CreateDirectory(carpetaImagenes);
+
+                string rutaLocal = Path.Combine(
+                    carpetaImagenes,
+                    nombreArchivo);
+
+                // Si la imagen ya está descargada, reutilizarla.  
+                if (File.Exists(rutaLocal))
+                    return rutaLocal;
+
+                // Descargar la imagen usando el cliente compartido.
+                // Esta URL corresponde a una imagen pública.
+                using var respuesta = await Api.EnviarAutenticadoAsync(
+                () => new HttpRequestMessage(HttpMethod.Get, uriImagen),
+                cancellationToken);
+
+                if (!respuesta.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"No se pudo descargar la imagen. HTTP: " +
+                        $"{(int)respuesta.StatusCode}");
+
+                    return null;
+                }
+
+                byte[] bytes = await respuesta.Content
+                    .ReadAsByteArrayAsync(cancellationToken);
+
+                if (bytes.Length == 0)
+                    return null;
+
+                await File.WriteAllBytesAsync(
+                    rutaLocal,
+                    bytes,
+                    cancellationToken);
+
+                return rutaLocal;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Error al descargar imagen del chat: {ex.Message}");
+
+                return null;
+            }
+        }
+
+        private async Task MostrarMensajeEnviadoAsync(
+            Mensaje mensaje,
+            List<string> urlsImagenes)
+        {
+            int idUsuarioActual =
+            SesionUsuario.UsuarioActual?.IdUsuario ?? 0;
+
+            mensaje.EsMio = mensaje.IdUsuario == idUsuarioActual;
+
+            mensaje.UrlFotoPerfil = mensaje.EsMio
+                ? _urlFotoUsuarioActual
+                : _urlFotoOtroUsuario;
+
+            mensaje.MostrarAcciones = false;
+
+            mensaje.Imagenes = urlsImagenes
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            mensaje.UrlImagen = mensaje.Imagenes.FirstOrDefault();
+
+            // Preparar las rutas locales para mostrar las imágenes inmediatamente.  
+            mensaje.ImagenesLocales = new List<string>();
+
+            foreach (string urlImagen in mensaje.Imagenes)
+            {
+                string? rutaLocal = await DescargarImagenChatAsync(
+                    urlImagen,
+                    CancellationToken.None);
+
+                if (!string.IsNullOrWhiteSpace(rutaLocal))
+                {
+                    mensaje.ImagenesLocales.Add(rutaLocal);
+                }
+            }
+
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                // Evita agregar dos veces el mismo mensaje.  
+                if (_mensajes.Any(m => m.IdMensaje == mensaje.IdMensaje))
+                    return;
+
+                _mensajes.Add(mensaje);
+
+                NuevosMensajesButton.IsVisible = false;
+
+                await Task.Yield();
+
+                MensajesCollectionView.ScrollTo(
+                    mensaje,
+                    position: ScrollToPosition.End,
+                    animate: false);
+            });
+        }
+
+        private async void OnEliminarConversacionClicked(
+            object sender,
+            EventArgs e)
+        {
+            if (!_conversacionArchivada ||
+                !_conversacionVerificada ||
+                !int.TryParse(IdConversacion, out int idConversacion) ||
+                idConversacion <= 0)
+            {
+                return;
+            }
+
+            bool confirmar = await DisplayAlertAsync(
+                "Eliminar conversación",
+                "Se eliminarán esta conversación, sus mensajes y las imágenes registradas. " +
+                "Esta acción no se puede deshacer. La transacción de venta y la publicación " +
+                "se conservarán. ¿Deseas continuar?",
+                "Sí, eliminar",
+                "Cancelar");
+
+            if (!confirmar)
+                return;
+
+            try
+            {
+                EliminarConversacionButton.IsEnabled = false;
+
+                string url = CrearUrl(
+                    $"api/Conversaciones/{idConversacion}");
+
+                using var respuesta =
+    await Api.EnviarAutenticadoAsync(
+        () => new HttpRequestMessage(
+            HttpMethod.Delete,
+            url));
+
+                if (!respuesta.IsSuccessStatusCode)
+                {
+                    string error =
+                        await respuesta.Content.ReadAsStringAsync();
+
+                    await DisplayAlertAsync(
+                        "Error",
+                        "No se pudo eliminar la conversación.\n\n" +
+                        $"Código HTTP: {(int)respuesta.StatusCode}\n{error}",
+                        "OK");
+
+                    return;
+                }
+
+                await DisplayAlertAsync(
+                    "Conversación eliminada",
+                    "La conversación y sus mensajes se eliminaron correctamente.",
+                    "OK");
+
+                await Shell.Current.GoToAsync("..");
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlertAsync(
+                    "Error de conexión",
+                    $"No se pudo eliminar la conversación.\n\n{ex.Message}",
+                    "OK");
+            }
+            finally
+            {
+                EliminarConversacionButton.IsEnabled = true;
+            }
+        }
+
+        private async void OnVerPerfilClicked(object sender, EventArgs e)
+        {
+            try
+            {
+                if (!SesionUsuario.EstaLogueado ||
+                    SesionUsuario.UsuarioActual == null)
+                {
+                    await DisplayAlertAsync(
+                        "Cuenta requerida",
+                        "Inicia sesión para consultar este perfil.",
+                        "Aceptar");
+
+                    return;
+                }
+
+                if (!int.TryParse(IdConversacion, out int idConversacion) ||
+                    idConversacion <= 0)
+                {
+                    await DisplayAlertAsync(
+                        "Error",
+                        "No se pudo identificar la conversación.",
+                        "Aceptar");
+
+                    return;
+                }
+
+                // Obtener la conversación para identificar al otro participante.
+                string url = CrearUrl(
+                    $"api/Conversaciones/{idConversacion}");
+
+                using var respuesta =
+                    await Api.EnviarAutenticadoAsync(
+                        () => new HttpRequestMessage(
+                            HttpMethod.Get,
+                            url));
+
+                if (!respuesta.IsSuccessStatusCode)
+                {
+                    await DisplayAlertAsync(
+                        "Error",
+                        "No se pudo obtener la información de la conversación.",
+                        "Aceptar");
+
+                    return;
+                }
+
+                var conversacion = await respuesta.Content
+                    .ReadFromJsonAsync<Conversacion>();
+
+                if (conversacion == null)
+                {
+                    await DisplayAlertAsync(
+                        "Error",
+                        "No se encontraron los datos de la conversación.",
+                        "Aceptar");
+
+                    return;
+                }
+
+                int idUsuarioActual = SesionUsuario.UsuarioActual.IdUsuario;
+
+                int idOtroUsuario;
+
+                if (idUsuarioActual == conversacion.IdUsuarioComprador)
+                {
+                    idOtroUsuario = conversacion.IdUsuarioVendedor;
+                }
+                else if (idUsuarioActual == conversacion.IdUsuarioVendedor)
+                {
+                    idOtroUsuario = conversacion.IdUsuarioComprador;
                 }
                 else
                 {
-                    mensajeSeleccionadoId = null;
+                    await DisplayAlertAsync(
+                        "Acceso denegado",
+                        "No formas parte de esta conversación.",
+                        "Aceptar");
+
+                    return;
                 }
+
+                await Shell.Current.GoToAsync(
+                nameof(PerfilPublicoPage),
+                new Dictionary<string, object>
+                {
+                    ["IdUsuario"] = idOtroUsuario.ToString()
+                });
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlertAsync(
+                    "Error",
+                    $"No se pudo abrir el perfil: {ex.Message}",
+                    "Aceptar");
+            }
+        }
+        private async Task<string?> ObtenerFotoPerfilAsync(int idUsuario)
+        {
+            try
+            {
+                string url = CrearUrl($"api/Usuarios/{idUsuario}");
+
+                using var respuesta =
+    await Api.EnviarAutenticadoAsync(
+        () => new HttpRequestMessage(
+            HttpMethod.Get,
+            url));
+
+                if (!respuesta.IsSuccessStatusCode)
+                    return null;
+
+                string json = await respuesta.Content.ReadAsStringAsync();
+
+                var usuario = JsonSerializer.Deserialize<UsuarioPerfil>(
+                json,
+                new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                System.Diagnostics.Debug.WriteLine(
+                $"Perfil {idUsuario}: " +
+                $"Usuario encontrado = {usuario != null}, " +
+                $"Foto recibida = {usuario?.UrlFotoPerfil ?? "(sin foto)"}");
+                if (usuario == null ||
+                    string.IsNullOrWhiteSpace(usuario.UrlFotoPerfil))
+                {
+                    return null;
+                }
+
+                return $"{ApiConfig.BaseUrl.TrimEnd('/')}/{usuario.UrlFotoPerfil.TrimStart('/')}";
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Error al obtener la foto del usuario {idUsuario}: {ex.Message}");
+
+                return null;
             }
         }
     }

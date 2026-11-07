@@ -30,7 +30,8 @@
 
             <Entry
                 x:Name="NombreEntry"
-                Placeholder="Nombre del producto" />
+                Placeholder="Nombre del producto"
+                MaxLength="100" />
 
             <Label
                 Text="Descripción"
@@ -39,8 +40,9 @@
             <Editor
                 x:Name="DescripcionEditor"
                 Placeholder="Descripción del producto"
+                MaxLength="500"
                 AutoSize="TextChanges"
-                MinimumHeightRequest="120" />
+                MinimumHeightRequest="150" />
 
             <Label
                 Text="Precio"
@@ -64,19 +66,6 @@
                 </Picker.Items>
             </Picker>
             <Label
-                Text="Estado"
-                FontAttributes="Bold" />
-
-            <Picker
-                x:Name="EstadoPicker"
-                Title="Selecciona el estado">
-                <Picker.Items>
-                    <x:String>Disponible</x:String>
-                    <x:String>Vendido</x:String>
-                    <x:String>Reservado</x:String>
-                </Picker.Items>
-            </Picker>
-            <Label
                 Text="Categoría"
                 FontAttributes="Bold" />
 
@@ -84,6 +73,34 @@
                 x:Name="CategoriaPicker"
                 Title="Selecciona una categoría"
                 ItemDisplayBinding="{Binding Nombre}" />
+
+            <Label
+                Text="Tipo de producto"
+                FontAttributes="Bold" />
+
+            <Picker
+                x:Name="TipoProductoPicker"
+                Title="Selecciona el tipo de producto"
+                SelectedIndex="0"
+                SelectedIndexChanged="OnTipoProductoChanged">
+
+                <Picker.Items>
+                    <x:String>Artículo único</x:String>
+                    <x:String>Producto con varias unidades</x:String>
+                </Picker.Items>
+            </Picker>
+
+            <Label
+                x:Name="CantidadDisponibleLabel"
+                Text="Cantidad disponible"
+                FontAttributes="Bold"
+                IsVisible="False" />
+
+            <Entry
+                x:Name="CantidadDisponibleEntry"
+                Placeholder="Cantidad disponible"
+                Keyboard="Numeric"
+                IsVisible="False" />
 
             <Label
                 Text="Imágenes del producto"

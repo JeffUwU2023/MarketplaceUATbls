@@ -1,13 +1,18 @@
 ﻿using MarketplaceUAT.App.Config;
 using MarketplaceUAT.App.Models;
+using MarketplaceUAT.App.Services;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MarketplaceUAT.App.Pages
 {
     [QueryProperty(nameof(IdProducto), "idProducto")]
     public partial class EditarProductoPage : ContentPage
     {
+        private ApiClient Api =>
+        Application.Current!.Handler.MauiContext!.Services
+        .GetRequiredService<ApiClient>();
         private string idProducto = string.Empty;
         private List<FileResult> NuevasImagenesSeleccionadas = [];
         private List<ImagenProducto> ImagenesActuales = [];
@@ -276,27 +281,34 @@ namespace MarketplaceUAT.App.Pages
             }
         }
 
+        private void OnTipoProductoChanged(object? sender, EventArgs e)
+        {
+            bool esProductoUnico = TipoProductoPicker.SelectedIndex == 0;
+
+            CantidadDisponibleLabel.IsVisible = !esProductoUnico;
+            CantidadDisponibleEntry.IsVisible = !esProductoUnico;
+
+            if (esProductoUnico)
+            {
+                CantidadDisponibleEntry.Text = "1";
+            }
+            else if (string.IsNullOrWhiteSpace(CantidadDisponibleEntry.Text) ||
+                     CantidadDisponibleEntry.Text == "1")
+            {
+                CantidadDisponibleEntry.Text = string.Empty;
+            }
+        }
+
         private async void CargarProducto()
         {
             try
             {
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
                 string url =
-                    $"{ApiConfig.BaseUrl}/api/Productos/{IdProducto}";
+                $"{ApiConfig.BaseUrl}/api/Productos/{IdProducto}";
 
-                var response = await client.GetAsync(url);
+                using var response =
+                    await Api.EnviarAutenticadoAsync(() =>
+                        new HttpRequestMessage(HttpMethod.Get, url));
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -333,13 +345,24 @@ namespace MarketplaceUAT.App.Pages
                 DescripcionEditor.Text = producto.Descripcion;
                 PrecioEntry.Text = producto.Precio.ToString("0.00");
                 CondicionPicker.SelectedItem = producto.Condicion;
-                EstadoPicker.SelectedItem = producto.Estado;
+
+                TipoProductoPicker.SelectedIndex =
+                    producto.EsProductoUnico ? 0 : 1;
+
+                CantidadDisponibleEntry.Text =
+                    producto.CantidadDisponible.ToString();
+
+                bool esProductoUnico = producto.EsProductoUnico;
+
+                CantidadDisponibleLabel.IsVisible = !esProductoUnico;
+                CantidadDisponibleEntry.IsVisible = !esProductoUnico;
 
                 string categoriasUrl =
                     $"{ApiConfig.BaseUrl}/api/Categorias";
 
-                var categoriasResponse =
-                    await client.GetAsync(categoriasUrl);
+                using var categoriasResponse =
+                await Api.EnviarAutenticadoAsync(() =>
+                new HttpRequestMessage(HttpMethod.Get, categoriasUrl));
 
                 if (categoriasResponse.IsSuccessStatusCode)
                 {
@@ -364,8 +387,9 @@ namespace MarketplaceUAT.App.Pages
                         string imagenesUrl =
     $"{ApiConfig.BaseUrl}/api/ImagenesProducto/Producto/{IdProducto}";
 
-                        var imagenesResponse =
-                            await client.GetAsync(imagenesUrl);
+                        using var imagenesResponse =
+                        await Api.EnviarAutenticadoAsync(() =>
+                        new HttpRequestMessage(HttpMethod.Get, imagenesUrl));
 
                         if (imagenesResponse.IsSuccessStatusCode)
                         {
@@ -431,14 +455,34 @@ namespace MarketplaceUAT.App.Pages
                     return;
                 }
 
-                if (EstadoPicker.SelectedItem is not string estado)
+                bool esProductoUnico = TipoProductoPicker.SelectedIndex == 0;
+
+                int cantidadDisponible = 1;
+
+                if (TipoProductoPicker.SelectedIndex < 0)
                 {
                     await DisplayAlertAsync(
                         "Datos incompletos",
-                        "Selecciona un estado.",
+                        "Selecciona el tipo de producto.",
                         "OK");
 
                     return;
+                }
+
+                if (!esProductoUnico)
+                {
+                    if (!int.TryParse(
+                        CantidadDisponibleEntry.Text,
+                        out cantidadDisponible) ||
+                        cantidadDisponible < 1)
+                    {
+                        await DisplayAlertAsync(
+                            "Cantidad inválida",
+                            "Ingresa una cantidad de al menos una unidad.",
+                            "OK");
+
+                        return;
+                    }
                 }
 
                 string nombre =
@@ -464,11 +508,11 @@ namespace MarketplaceUAT.App.Pages
                     return;
                 }
 
-                if (nombre.Length < 10)
+                if (nombre.Length < 3)
                 {
                     await DisplayAlertAsync(
                         "Nombre demasiado corto",
-                        "El nombre del producto debe tener al menos 10 caracteres.",
+                        "El nombre del producto debe tener al menos 3 caracteres.",
                         "OK");
 
                     return;
@@ -487,16 +531,6 @@ namespace MarketplaceUAT.App.Pages
                 string descripcion =
                 DescripcionEditor.Text?.Trim() ?? string.Empty;
 
-                if (string.IsNullOrWhiteSpace(descripcion))
-                {
-                    await DisplayAlertAsync(
-                        "Descripción obligatoria",
-                        "La descripción del producto es obligatoria.",
-                        "OK");
-
-                    return;
-                }
-
                 if (descripcion.Length > 500)
                 {
                     await DisplayAlertAsync(
@@ -505,61 +539,40 @@ namespace MarketplaceUAT.App.Pages
                         "OK");
 
                     return;
-                }
-
-                if (descripcion.Length < 25)
-                {
-                    await DisplayAlertAsync(
-                        "Descripción demasiado corta",
-                        "La descripción debe tener al menos 25 caracteres.",
-                        "OK");
-
-                    return;
-                }
-
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = null,
-                    UseProxy = false
-                };
-
-
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(10)
-                };
-
-                client.DefaultRequestHeaders.ConnectionClose = true;
-
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        SesionUsuario.Token);
+                }               
 
                 var productoActualizado = new
                 {
-                    IdUsuario = SesionUsuario.UsuarioActual!.IdUsuario,
                     IdCategoria = categoria.IdCategoria,
+                    EsProductoUnico = esProductoUnico,
+                    CantidadDisponible = cantidadDisponible,
                     Nombre = nombre,
                     Descripcion = descripcion,
                     Precio = precio,
-                    Condicion = condicion,
-                    Estado = estado
+                    Condicion = condicion
                 };
 
                 string json = JsonSerializer.Serialize(productoActualizado);
 
-                using var content = new StringContent(
-                    json,
-                    System.Text.Encoding.UTF8,
-                    "application/json");
-
                 string url =
-                    $"{ApiConfig.BaseUrl}/api/Productos/{IdProducto}";
+    $"{ApiConfig.BaseUrl}/api/Productos/{IdProducto}";
 
-                var response = await client.PutAsync(
-                    url,
-                    content);
+                using var response =
+                    await Api.EnviarAutenticadoAsync(() =>
+                    {
+                        var content = new StringContent(
+                            json,
+                            System.Text.Encoding.UTF8,
+                            "application/json");
+
+                        return new HttpRequestMessage(HttpMethod.Put, url)
+                        {
+                            Content = content
+                        };
+                    });
+
+                if (await ManejarSesionExpiradaAsync(response))
+                    return;
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -574,8 +587,14 @@ namespace MarketplaceUAT.App.Pages
                         string eliminarImagenUrl =
                             $"{ApiConfig.BaseUrl}/api/ImagenesProducto/{imagen.IdImagen}";
 
-                        var eliminarResponse =
-                            await client.DeleteAsync(eliminarImagenUrl);
+                        using var eliminarResponse =
+    await Api.EnviarAutenticadoAsync(() =>
+        new HttpRequestMessage(
+            HttpMethod.Delete,
+            eliminarImagenUrl));
+
+                        if (await ManejarSesionExpiradaAsync(eliminarResponse))
+                            return;
 
                         if (!eliminarResponse.IsSuccessStatusCode)
                         {
@@ -612,10 +631,24 @@ namespace MarketplaceUAT.App.Pages
                                 System.Text.Encoding.UTF8,
                                 "application/json");
 
-                        var actualizarResponse =
-                            await client.PutAsync(
-                                actualizarImagenUrl,
-                                imagenContent);
+                        using var actualizarResponse =
+    await Api.EnviarAutenticadoAsync(() =>
+    {
+        var nuevoContent = new StringContent(
+            imagenJson,
+            System.Text.Encoding.UTF8,
+            "application/json");
+
+        return new HttpRequestMessage(
+            HttpMethod.Put,
+            actualizarImagenUrl)
+        {
+            Content = nuevoContent
+        };
+    });
+
+                        if (await ManejarSesionExpiradaAsync(actualizarResponse))
+                            return;
 
                         if (!actualizarResponse.IsSuccessStatusCode)
                         {
@@ -635,14 +668,7 @@ namespace MarketplaceUAT.App.Pages
                     {
                         FileResult imagen = NuevasImagenesSeleccionadas[i];
 
-                        using var imagenContent =
-                            new MultipartFormDataContent();
-
-                        using var archivoStream =
-                            await imagen.OpenReadAsync();
-
-                        using var streamContent =
-                            new StreamContent(archivoStream);
+     
 
                         string extension = Path.GetExtension(imagen.FileName)
     .ToLowerInvariant();
@@ -665,18 +691,32 @@ namespace MarketplaceUAT.App.Pages
                             return;
                         }
 
-                        streamContent.Headers.ContentType =
-                            new MediaTypeHeaderValue(tipoMime);
+                        using var imagenResponse =
+    await Api.EnviarAutenticadoAsync(async () =>
+    {
+        var nuevoContent = new MultipartFormDataContent();
 
-                        imagenContent.Add(
-                            streamContent,
-                            "archivo",
-                            imagen.FileName);
+        var nuevoStream = await imagen.OpenReadAsync();
+        var nuevoStreamContent = new StreamContent(nuevoStream);
 
-                        var imagenResponse =
-                            await client.PostAsync(
-                                subirImagenUrl,
-                                imagenContent);
+        nuevoStreamContent.Headers.ContentType =
+            new MediaTypeHeaderValue(tipoMime);
+
+        nuevoContent.Add(
+            nuevoStreamContent,
+            "archivo",
+            imagen.FileName);
+
+        return new HttpRequestMessage(
+            HttpMethod.Post,
+            subirImagenUrl)
+        {
+            Content = nuevoContent
+        };
+    });
+
+                        if (await ManejarSesionExpiradaAsync(imagenResponse))
+                            return;
 
                         if (!imagenResponse.IsSuccessStatusCode)
                         {
@@ -712,16 +752,24 @@ namespace MarketplaceUAT.App.Pages
                         string imagenRegistroJson =
                             JsonSerializer.Serialize(imagenDto);
 
-                        using var imagenRegistroContent =
-                            new StringContent(
-                                imagenRegistroJson,
-                                System.Text.Encoding.UTF8,
-                                "application/json");
+                        using var registroResponse =
+    await Api.EnviarAutenticadoAsync(() =>
+    {
+        var nuevoContent = new StringContent(
+            imagenRegistroJson,
+            System.Text.Encoding.UTF8,
+            "application/json");
 
-                        var registroResponse =
-                            await client.PostAsync(
-                                imagenRegistroUrl,
-                                imagenRegistroContent);
+        return new HttpRequestMessage(
+            HttpMethod.Post,
+            imagenRegistroUrl)
+        {
+            Content = nuevoContent
+        };
+    });
+
+                        if (await ManejarSesionExpiradaAsync(registroResponse))
+                            return;
 
                         if (!registroResponse.IsSuccessStatusCode)
                         {
@@ -763,6 +811,28 @@ namespace MarketplaceUAT.App.Pages
                     "OK");
             }
         }
+
+        private async Task<bool> ManejarSesionExpiradaAsync(
+    HttpResponseMessage response)
+        {
+            if ((int)response.StatusCode != 401)
+                return false;
+
+            await SesionUsuario.CerrarSesionAsync();
+
+            await DisplayAlertAsync(
+                "Sesión expirada",
+                "Tu sesión ya no es válida. Inicia sesión nuevamente.",
+                "OK");
+
+            if (Shell.Current != null)
+            {
+                await Shell.Current.GoToAsync(nameof(LoginPage));
+            }
+
+            return true;
+        }
+
         private async void OnCancelarClicked(
             object sender,
             EventArgs e)
