@@ -105,7 +105,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             }
         };
     });
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -142,7 +141,6 @@ builder.Services.AddHostedService<LimpiezaImagenesChatService>();
 
 var app = builder.Build();
 
-// Manejo global de errores inesperados.
 app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
@@ -169,7 +167,8 @@ app.UseExceptionHandler(errorApp =>
 
         await context.Response.WriteAsJsonAsync(new
         {
-            mensaje = "Ocurrió un error interno. Intenta nuevamente más tarde."
+            mensaje = "Error temporal de diagnóstico.",
+            error = exceptionFeature?.Error?.GetBaseException().Message
         });
     });
 });
@@ -188,11 +187,8 @@ if (app.Environment.IsDevelopment())
 
 }
 
-// app.UseHttpsRedirection();
-
 app.UseAuthentication();
 
-// Protege las imágenes del chat antes de servir archivos estáticos.
 app.Use(async (context, next) =>
 {
     var ruta = context.Request.Path;
@@ -205,8 +201,6 @@ app.Use(async (context, next) =>
         return;
     }
 
-    // Solo se aceptan rutas:
-    // /Images/Chat/{idConversacion}/{archivo}
     var segmentos = ruta.Value!.Split(
     '/',
     StringSplitOptions.RemoveEmptyEntries);
@@ -257,7 +251,6 @@ app.Use(async (context, next) =>
         return;
     }
 
-    // Comprueba que la conversación esté activa.
     if (!conversacion.Activa)
     {
         context.Response.StatusCode =
@@ -265,7 +258,6 @@ app.Use(async (context, next) =>
         return;
     }
 
-    // Comprueba que la imagen esté registrada y activa.
     string nombreArchivo = segmentos[3];
 
     var imagenActiva = await (

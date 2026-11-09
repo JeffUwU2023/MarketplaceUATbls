@@ -2,6 +2,6 @@
 {
     public static class ApiConfig
     {
-        public const string BaseUrl = "https://helping-reception-arrangement-saves.trycloudflare.com";
+        public const string BaseUrl = "https://ojmo1411-001-site1.etempurl.com";
     }
 }
